@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>完美段位监控 - 全量数据</title>
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: #0b0e14; }
+body { font: 13px/1.6 Consolas, "Microsoft YaHei", monospace; color: #cfd6df; padding: 20px 24px; }
+h2 { margin: 0 0 4px; font-size: 16px; color: #ffd56b; }
+p.src { margin: 0 0 12px; color: #8a93a3; font-size: 12px; }
+p.src code { color: #8ab4ff; }
+details { padding-left: 18px; }
+details > summary { cursor: pointer; color: #8ab4ff; list-style: none; }
+details > summary::before { content: "▸ "; color: #5c6570; }
+details[open] > summary::before { content: "▾ "; }
+.k { color: #ffd56b; }
+.v-str { color: #7edb9b; }
+.v-num { color: #7fc4ff; }
+.v-bool { color: #d38c25; }
+.v-null { color: #5c6570; font-style: italic; }
+.leaf { padding-left: 18px; }
+</style>
+</head>
+<body>
+<!-- 示例页: 展示 /api/state 返回的全部数据, 每 2 秒刷新。
+     自定义页面时可作为变量/字段的数据参照 -->
+<h2>全量数据</h2>
+<p class="src">数据源: <code>GET /api/state</code> · 2 秒自动刷新 · 点条目可折叠</p>
+<div id="tree"></div>
+<script>
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function typeCls(v) {
+  if (v === null) return 'v-null';
+  switch (typeof v) {
+    case 'string': return 'v-str';
+    case 'number': return 'v-num';
+    case 'boolean': return 'v-bool';
+  }
+  return '';
+}
+function fmt(v) {
+  if (v === null) return 'null';
+  if (typeof v === 'string') return '"' + esc(v) + '"';
+  return esc(String(v));
+}
+function render(v) {
+  if (Array.isArray(v)) {
+    if (v.length === 0) return '<div class="leaf"><span class="v-null">[]</span></div>';
+    return '<details open><summary>[#' + v.length + ']</summary>'
+      + v.map(x => render(x)).join('') + '</details>';
+  }
+  if (v !== null && typeof v === 'object') {
+    const keys = Object.keys(v);
+    if (keys.length === 0) return '<div class="leaf"><span class="v-null">{}</span></div>';
+    return '<details open><summary>{}</summary>'
+      + keys.map(k => '<div><span class="k">' + esc(k) + '</span>: '
+        + (v[k] !== null && typeof v[k] === 'object' ? render(v[k]) : '<span class="' + typeCls(v[k]) + '">' + fmt(v[k]) + '</span>')
+        + '</div>').join('')
+      + '</details>';
+  }
+  return '<div class="leaf"><span class="' + typeCls(v) + '">' + fmt(v) + '</span></div>';
+}
+async function tick() {
+  try {
+    const s = await (await fetch('/api/state', { cache: 'no-store' })).json();
+    document.getElementById('tree').innerHTML = render(s);
+  } catch (e) {
+    document.getElementById('tree').innerHTML = '<p class="v-null">获取失败: ' + esc(e) + '</p>';
+  }
+}
+tick();
+setInterval(tick, 2000);
+</script>
+</body>
+</html>

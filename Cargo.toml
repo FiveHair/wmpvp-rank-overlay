@@ -1,0 +1,29 @@
+[package]
+name = "wmpvp-rank-overlay"
+version = "0.1.0"
+edition = "2021"
+description = "完美世界竞技平台(CS2)对局段位监控 - OBS 覆盖层。进局显示双方段位计分板, 平时显示自己账号信息卡片。"
+license = "MIT"
+
+[dependencies]
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "macros", "sync", "time", "net"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
+futures-util = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+regex = "1"
+md-5 = "0.10"
+axum = "0.7"
+anyhow = "1"
+tracing = "0.1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+eframe = { version = "0.35.0", default-features = false, features = ["default_fonts", "glow", "persistence"] }
+tray-icon = "0.24.2"
+
+[build-dependencies]
+winresource = "0.1"
+
+[profile.release]
+opt-level = 2

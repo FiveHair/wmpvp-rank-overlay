@@ -1,0 +1,11 @@
+{
+  "name": "time",
+  "comment": "示例插件: 北京时间, 抓 timeapi.io 的 Asia/Shanghai 当前时间",
+  "url": "https://timeapi.io/api/Time/current/zone?timeZone=Asia/Shanghai",
+  "interval_sec": 60,
+  "retry_sec": 30,
+  "extract": [
+    { "var": "TIME", "type": "regex", "pattern": "\"dateTime\":\"[^\"]*T(\\d{2}:\\d{2}:\\d{2})" },
+    { "var": "DATE", "type": "regex", "pattern": "\"dateTime\":\"(\\d{4}-\\d{2}-\\d{2})" }
+  ]
+}

@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>完美段位监控 - 账号卡</title>
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: transparent; }
+body { font: 12px/1.5 "Microsoft YaHei", "PingFang SC", sans-serif; color: #e8eaed; user-select: none; overflow: hidden; }
+#wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+
+/* 账号卡 */
+#idle-card {
+  width: 320px;
+  background: rgba(9,11,16,.88);
+  border-radius: 10px;
+  padding: 14px 16px 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.55);
+}
+.idle-top { display: flex; align-items: center; gap: 10px; }
+.avatar-wrap {
+  width: 40px; height: 40px; border-radius: 50%;
+  border: 1px solid #2c3948; background: #141a24;
+  flex: none; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+}
+.avatar-wrap .avatar { width: 100%; height: 100%; object-fit: cover; display: block; }
+.avatar-wrap .avatar-fb { display: none; font-size: 18px; color: #ffd479; }
+.avatar-wrap.fallback .avatar { display: none; }
+.avatar-wrap.fallback .avatar-fb { display: block; }
+.name {
+  flex: 1; min-width: 0; font-size: 16px; font-weight: 700; color: #fff;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.rankbox { display: flex; align-items: center; gap: 8px; flex: none; }
+
+/* 段位徽章(完美官方): 非 S = 盾牌 + 六边形进度环 + 字母; S = 钻石 + 星xN */
+.rank-badge { position: relative; width: 46px; height: 46px; flex: none; display: inline-block; }
+.rank-badge .rb-bg { position: absolute; top: 0; left: 50%; height: 100%; transform: translateX(-50%); }
+.rank-badge .rb-ring { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.rank-badge .rb-letter { position: absolute; left: 50%; top: 50%; height: 18px; width: auto; transform: translate(-50%, -50%); }
+.rb-ring .trk { fill: none; stroke-width: 5; }
+.rb-ring .cov { fill: none; stroke: #16171d; stroke-width: 7; stroke-dasharray: 324; }
+.rb-ring .fil { fill: none; stroke: #1d2431; stroke-width: 5; stroke-dasharray: 324; }
+.rb-ring .fil.sup { stroke: #31250f; }
+.s-diamond { width: 40px; height: 40px; object-fit: contain; display: block; flex: none; }
+.s-rank { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.s-rank .s-n { color: #ffd56b; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* 赛季统计 */
+.idle-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 14px; }
+.stat-item { text-align: center; }
+.stat-item .lbl { display: block; font-size: 15px; color: #8a93a3; letter-spacing: 1px; }
+.stat-item .val { display: block; font-size: 15px; font-weight: 700; color: #fff; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.stat-item .val.na { color: #5c6570; }
+
+/* 插件示例: 北京时间(plugins/time.json); 无数据时整行自动隐藏 */
+.time-row {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.06);
+}
+.time-row .lbl { font-size: 11px; color: #8a93a3; letter-spacing: 1px; }
+.time-row .val { font-size: 15px; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<!-- 自定义说明: 所有 {{MY.*}} / {{{MY.RANKBOX}}} 变量每 1.5s 自动替换为实时数据;
+     全部数据(变量与实时值)见 http://127.0.0.1:端口/all ;
+     本文件可随意改样式(勿删脚本与变量), 同名 account.css 会被自动加载且优先级更高 -->
+<div id="wrap">
+  <div id="idle-card">
+    <div class="idle-top">
+      <span class="avatar-wrap"><img class="avatar" src="{{MY.AVATAR}}" alt="" onerror="this.parentNode.classList.add('fallback')" onload="this.parentNode.classList.remove('fallback')"><span class="avatar-fb">★</span></span>
+      <span class="name">{{MY.NAME}}</span>
+      <span class="rankbox">{{{MY.RANKBOX}}}</span>
+    </div>
+    <div class="idle-stats">
+      <div class="stat-item"><span class="lbl">WE</span><span class="val">{{MY.WE}}</span></div>
+      <div class="stat-item"><span class="lbl">RatingPro</span><span class="val">{{MY.RATING}}</span></div>
+      <div class="stat-item"><span class="lbl">ADR</span><span class="val">{{MY.ADR}}</span></div>
+      <div class="stat-item"><span class="lbl">RWS</span><span class="val">{{MY.RWS}}</span></div>
+      <div class="stat-item"><span class="lbl">胜场</span><span class="val">{{MY.WINS}}</span></div>
+      <div class="stat-item"><span class="lbl">胜率</span><span class="val">{{MY.WINRATE}}</span></div>
+      <div class="stat-item"><span class="lbl">KDA</span><span class="val">{{MY.KDA}}</span></div>
+      <div class="stat-item"><span class="lbl">爆头</span><span class="val">{{MY.HS}}</span></div>
+    </div>
+    <div class="time-row" id="time-row">
+      <span class="lbl">北京时间</span><span class="val">{{PLUGIN.TIME.DATE}} {{PLUGIN.TIME.TIME}}</span>
+    </div>
+  </div>
+</div>
+<script>
+const POLL = 1500;
+
+// ===== 变量引擎: 每轮将 {{MY.*}} 文本与 {{{MY.RANKBOX}}} 片段替换为实时数据 =====
+let varSnapshotted = false;
+const fmt1 = v => (v == null ? '—' : Number(v).toFixed(1));
+const fmt2 = v => (v == null ? '—' : Number(v).toFixed(2));
+const fmtPct = v => (v == null ? '—' : Math.round(v * 100) + '%');
+
+function statusText(my) {
+  switch (my.ws_status) {
+    case 'in-match': return '对局监控中';
+    case 'idle': return '空闲';
+    case 'connecting': return '正在连接…';
+    case 'resolving': return '正在反查账号…';
+    case 'not-found': return my.last_error || '未找到该账号';
+    case 'error': return my.last_error || '连接异常, 重连中…';
+    default: return '等待中…';
+  }
+}
+
+// 官方 S 段图标按星级分四档: 0-9 普通(青蓝) / 10-24 金色 / 25-49 钻石 / >=50 魔王
+function sDiamondIcon(stars) {
+  const n = Math.max(0, Number(stars) || 0);
+  if (n >= 50) return '/assets/s-diamond-1.png';
+  if (n >= 25) return '/assets/s-gold-1.png';
+  if (n >= 10) return '/assets/s-silver-1.png';
+  return '/assets/s-brass-s21.png';
+}
+
+// 官方段位徽章(天梯页 rank-progress): 盾牌 + 六边形渐变边框进度环 + 字母; S 段钻石 + 星xN
+let RING_UID = 0;
+function rankBadgeHtml(p) {
+  if (p.rank_class === 'S') {
+    const n = Math.max(0, Number(p.stars) || 0);
+    return '<span class="s-rank"><img class="s-diamond" src="' + sDiamondIcon(n) + '" alt="S">'
+      + (n > 0 ? '<b class="s-n">x' + n + '</b>' : '') + '</span>';
+  }
+  const elite = String(p.rank_label || '').indexOf('精英') >= 0;
+  const cls = p.rank_class || 'U';
+  const c = elite
+    ? (cls === 'A' ? ['#d38c25','#fce9c0','#e5c17e','#f2d29a','#f3d49d']
+      : cls === 'B' ? ['#9f7230','#bca36c','#c1a76e','#b5975d','#b5975e']
+      : ['#674b1d','#947444','#b89156','#927243','#937343'])
+    : ['#4da2ff','#75d0a4','#7eff94','#6BC5BA','#77DBA0'];
+  const prog = Math.max(0, Math.min(1, Number(p.rank_progress) || 0));
+  const off = ' style="stroke-dashoffset:' + (prog * 324).toFixed(1) + '"';
+  const id = 'rg' + (++RING_UID);
+  const bg = elite ? cls + '11_bg.svg' : 'ABC_bg.svg';
+  const HEX = 'M71 125 L117.77 98 117.77 44 71 17 24.23 44 24.23 98 Z';
+  return '<span class="rank-badge">'
+    + '<img class="rb-bg" src="/assets/' + bg + '" alt="">'
+    + '<svg class="rb-ring" viewBox="0 0 142 142">'
+    + '<defs>'
+    + '<linearGradient id="' + id + 'l" x1="0" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="' + c[0] + '"/><stop offset="100%" stop-color="' + c[1] + '"/></linearGradient>'
+    + '<linearGradient id="' + id + 'r" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="' + c[1] + '"/><stop offset="100%" stop-color="' + c[2] + '"/></linearGradient>'
+    + '<linearGradient id="' + id + 't" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="' + c[3] + '"/><stop offset="100%" stop-color="' + c[4] + '"/></linearGradient>'
+    + '</defs>'
+    + '<polyline class="trk" points="71 125, 24.23 98, 24.23 44, 71 17" stroke="url(#' + id + 'l)"/>'
+    + '<polyline class="trk" points="71 17, 117.77 44, 117.77 98, 71 125" stroke="url(#' + id + 'r)"/>'
+    + '<polyline class="trk" points="24.23 44, 71 17, 117.77 44" stroke="url(#' + id + 't)"/>'
+    + '<path class="cov" d="' + HEX + '" pathLength="324"' + off + '/>'
+    + '<path class="fil' + (elite ? ' sup' : '') + '" d="' + HEX + '" pathLength="324"' + off + '/>'
+    + '</svg>'
+    + '<img class="rb-letter" src="' + esc(p.rank_icon) + '" alt="" onerror="this.remove()">'
+    + '</span>';
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// 文本变量表
+function buildVarMap(s){
+  const map = {};
+  const set = (k, v) => { map[k] = (v === undefined || v === null || v === '') ? '' : String(v); };
+  const my = s.my || {}, stt = my.stats || {};
+  set('MY.NAME', my.nickname || '未配置账号');
+  set('MY.STEAM.ID', my.steam_id);
+  set('MY.STEAM.SHORT', String(my.steam_id || '').slice(-8));
+  set('MY.AVATAR', my.avatar ? '/assets/avatar.png?v=' + encodeURIComponent(my.avatar) : '');
+  set('MY.RANK', my.rank_label);
+  set('MY.RANK.ICON', my.rank_icon);
+  set('MY.RANK.CLASS', my.rank_class);
+  set('MY.RANK.PROGRESS', Math.round((Number(my.rank_progress) || 0) * 100));
+  set('MY.SCORE', my.rank_score);
+  set('MY.STARS', stt.stars);
+  set('MY.WE', fmt1(stt.avg_we));
+  set('MY.RATING', fmt2(stt.rating_pro));
+  set('MY.ADR', fmt1(stt.adr));
+  set('MY.RWS', fmt1(stt.rws));
+  set('MY.WINS', stt.season_cnt);
+  set('MY.WINRATE', fmtPct(stt.win_rate));
+  set('MY.KDA', fmt2(stt.kda));
+  set('MY.HS', fmtPct(stt.headshot_ratio));
+  set('MY.SEASON', stt.season_id);
+  set('MY.STATUS', statusText(my));
+  set('MY.ERROR', my.last_error);
+  set('IN.MATCH', s.in_match ? '对局中' : '空闲');
+  // 数据插件变量: {{PLUGIN.<插件名>.<变量>}}
+  const pl = s.plugins || {};
+  for (const pname of Object.keys(pl)) {
+    for (const v of Object.keys(pl[pname])) {
+      set('PLUGIN.' + pname.toUpperCase() + '.' + v.toUpperCase(), pl[pname][v]);
+    }
+  }
+  return map;
+}
+
+// HTML 片段变量表
+function buildRawMap(s){
+  const raw = {};
+  const my = s.my || {}, stt = my.stats || {};
+  raw['MY.RANKBOX'] = rankBadgeHtml({
+    rank_class: my.rank_class, rank_label: my.rank_label, rank_icon: my.rank_icon,
+    rank_progress: my.rank_progress, stars: stt.stars,
+  });
+  return raw;
+}
+
+// 首次为含 {{ 的文本节点/属性保存原始模板, 之后每轮按模板重填
+function snapshotVarTemplates(){
+  if (varSnapshotted) return;
+  varSnapshotted = true;
+  const rx = /\{\{\s*[A-Z0-9_.{}]+\s*\}\}/;
+  const texts = [];
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()){ if (rx.test(walker.currentNode.nodeValue)) texts.push(walker.currentNode); }
+  for (const n of texts){
+    if (n.nodeValue.indexOf('{{{') >= 0) n.__tplRaw = n.nodeValue;
+    else n.__tpl = n.nodeValue;
+  }
+  for (const el of document.body.querySelectorAll('*')){
+    for (const a of [...el.attributes]){
+      if (rx.test(a.value)) el.dataset['tpl_' + a.name] = a.value;
+    }
+  }
+}
+
+function applyVars(map, raw){
+  snapshotVarTemplates();
+  const rxRaw = /\{\{\{([A-Z0-9_.]+)\}\}\}/g;
+  const rx = /\{\{\s*([A-Z0-9_.]+)\s*\}\}/g;
+  const fill = t => t
+    .replace(rxRaw, (_, k) => (raw && raw[k] !== undefined) ? raw[k] : '')
+    .replace(rx, (_, k) => map[k] !== undefined ? map[k] : '');
+  const texts = [];
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) texts.push(walker.currentNode);
+  for (const n of texts){
+    const tpl = n.__tpl;
+    if (tpl === undefined) continue;
+    n.nodeValue = fill(tpl);
+  }
+  const raws = [];
+  const walker2 = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  while (walker2.nextNode()){ if (walker2.currentNode.__tplRaw !== undefined) raws.push(walker2.currentNode); }
+  for (const n of raws){
+    if (!n.isConnected) continue;
+    const tmp = document.createElement('div');
+    tmp.innerHTML = fill(n.__tplRaw);
+    while (tmp.firstChild) n.parentNode.insertBefore(tmp.firstChild, n);
+    n.parentNode.removeChild(n);
+  }
+  for (const el of document.body.querySelectorAll('*')){
+    for (const a of [...el.attributes]){
+      const tpl = el.dataset['tpl_' + a.name];
+      if (tpl === undefined) continue;
+      el.setAttribute(a.name, fill(tpl));
+    }
+  }
+}
+
+function refresh() {
+  fetch('/api/state', { cache: 'no-store' }).then(r => r.json()).then(s => {
+    const map = buildVarMap(s);
+    const raw = buildRawMap(s);
+    applyVars(map, raw);
+    // 北京时间插件无数据时隐藏整行
+    const tr = document.getElementById('time-row');
+    if (tr) tr.style.display = (map['PLUGIN.TIME.TIME'] || map['PLUGIN.TIME.DATE']) ? '' : 'none';
+  }).catch(() => {});
+}
+setInterval(refresh, POLL);
+refresh();
+</script>
+</body>
+</html>

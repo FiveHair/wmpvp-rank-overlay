@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>完美段位监控 - 对局板</title>
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: transparent; }
+body { font: 12px/1.5 "Microsoft YaHei", "PingFang SC", sans-serif; color: #e8eaed; user-select: none; overflow: hidden; }
+#wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+
+/* 段位徽章(完美官方): 非 S = 盾牌 + 六边形进度环 + 字母; S = 钻石 + 星xN */
+.rank-badge { position: relative; width: 50px; height: 50px; flex: none; display: inline-block; }
+.rank-badge .rb-bg { position: absolute; top: 0; left: 50%; height: 100%; transform: translateX(-50%); }
+.rank-badge .rb-ring { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.rank-badge .rb-letter { position: absolute; left: 50%; top: 50%; height: 20px; width: auto; transform: translate(-50%, -50%); }
+.rb-ring .trk { fill: none; stroke-width: 5; }
+.rb-ring .cov { fill: none; stroke: #16171d; stroke-width: 7; stroke-dasharray: 324; }
+.rb-ring .fil { fill: none; stroke: #1d2431; stroke-width: 5; stroke-dasharray: 324; }
+.rb-ring .fil.sup { stroke: #31250f; }
+.s-diamond { width: 38px; height: 38px; object-fit: contain; display: block; flex: none; }
+.s-rank { display: inline-flex; align-items: center; gap: 4px; flex: none; height: 50px; }
+.s-rank .s-n { color: #ffd56b; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* 对局板: 双列斜向对阵, 中央 VS, 底部均分; 两侧向中间收拢 */
+.battle { display: grid; grid-template-columns: 1fr auto 1fr; column-gap: 120px; row-gap: 12px; align-items: center; }
+.side-tag { font-size: 18px; font-weight: 700; padding: 4px 18px; border-radius: 6px; width: max-content; margin-left: 14px; opacity: 0; }
+.side-tag.ct-tag { background: rgba(64,130,255,.18); color: #7fb2ff; border: 1px solid rgba(64,130,255,.4); }
+.side-tag.t-tag { background: rgba(255,176,64,.16); color: #ffc06b; border: 1px solid rgba(255,176,64,.4); }
+.pcard {
+  display: flex; align-items: center; gap: 14px;
+  width: 430px; min-width: 0; padding: 8px 20px; min-height: 60px;
+  border-radius: 12px; margin-left: calc(var(--i) * 46px + var(--inset, 0px));
+  opacity: 0;
+}
+.pcard.ct { background: rgba(64,130,255,.16); border: 1px solid rgba(64,130,255,.32); --inset: 90px; }
+.pcard.t  { background: rgba(255,176,64,.14); border: 1px solid rgba(255,176,64,.32); --inset: -90px; }
+.pcard .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #d7dce3; font-size: 22px; }
+.pcard .nm.me { color: #ffd479; font-weight: 700; }
+.pcard .nm.me::before { content: "★ "; }
+.pcard .s-rank { height: 50px; }
+.vs { grid-column: 2; grid-row: 2 / span var(--rows, 5); align-self: center; justify-self: center; font-size: 68px; font-weight: 800; font-style: italic; color: #aebdd2; letter-spacing: 3px; opacity: 0; text-shadow: 0 4px 18px rgba(0,0,0,.6); }
+.avg { font-size: 16px; font-weight: 700; padding: 4px 16px; border-radius: 6px; width: max-content; opacity: 0; font-variant-numeric: tabular-nums; }
+.avg.ct-avg { background: rgba(64,130,255,.12); color: #8ab4ff; border: 1px solid rgba(64,130,255,.3); margin-left: 250px; }
+.avg.t-avg  { background: rgba(255,176,64,.11); color: #ffc06b; border: 1px solid rgba(255,176,64,.3); margin-left: 110px; }
+
+/* 近五场胜负: W 绿 / L 红 */
+.form { display: inline-flex; gap: 3px; flex: none; }
+.form i { font-style: normal; width: 19px; height: 22px; border-radius: 4px; font-size: 13px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; }
+.form i.w { color: #0d2b19; background: #35d07f; }
+.form i.l { color: #34100c; background: #ff5a4e; }
+
+/* 磨砂底 */
+.frost {
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(120% 90% at 50% 40%, rgba(10,14,22,.35), rgba(6,8,12,.72)),
+    rgba(8,11,17,.55);
+  opacity: 0; pointer-events: none;
+  z-index: 0;
+}
+#wrap { position: relative; z-index: 1; }
+@keyframes frostIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes frostOut { from { opacity: 1; } to { opacity: 0; } }
+body.frost-in .frost { animation: frostIn .5s ease-out both; }
+body.frost-out .frost { animation: frostOut .4s ease-in both; }
+body.frost-stay .frost { opacity: 1; }
+
+/* 入场: 成对从屏幕两侧滑入, 行错峰半拍; 全部落位后 队标/VS/均分 依次入场 */
+@keyframes slideInL { from { opacity: 0; transform: translateX(-70vw); } to { opacity: 1; transform: none; } }
+@keyframes slideInR { from { opacity: 0; transform: translateX(70vw); } to { opacity: 1; transform: none; } }
+@keyframes tagIn { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: none; } }
+@keyframes vsIn { from { opacity: 0; transform: scale(.55); } to { opacity: 1; transform: scale(1); } }
+@keyframes avgIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+/* 出场: 反向滑回屏幕两侧 */
+@keyframes slideOutL { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateX(-70vw); } }
+@keyframes slideOutR { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateX(70vw); } }
+#board.in .pcard.ct { animation: slideInL .65s cubic-bezier(.25,.75,.3,1) both; animation-delay: calc(var(--i) * .32s); }
+#board.in .pcard.t  { animation: slideInR .65s cubic-bezier(.25,.75,.3,1) both; animation-delay: calc(var(--i) * .32s); }
+#board.in .side-tag { animation: tagIn .45s ease-out both; animation-delay: calc(var(--vsd, 2.4s) - .18s); }
+#board.in .vs { animation: vsIn .5s cubic-bezier(.3,1.6,.4,1) both; animation-delay: var(--vsd, 2.4s); }
+#board.in .avg { animation: avgIn .45s ease-out both; animation-delay: calc(var(--vsd, 2.4s) + .15s); }
+#board.settled .pcard, #board.settled .vs, #board.settled .side-tag, #board.settled .avg { opacity: 1; animation: none; }
+#board.out .pcard.ct { animation: slideOutL .5s ease-in both; animation-delay: calc((var(--n, 5) - var(--i) - 1) * .24s); }
+#board.out .pcard.t  { animation: slideOutR .5s ease-in both; animation-delay: calc((var(--n, 5) - var(--i) - 1) * .24s); }
+#board.out .vs, #board.out .side-tag, #board.out .avg { animation: fadeHide .3s ease-in both; }
+@keyframes fadeHide { from { opacity: 1; } to { opacity: 0; } }
+</style>
+</head>
+<body>
+<!-- 自定义说明: 所有 {{MATCH.*}} / {{{CT.1.BADGE}}} / {{{CT.1.FORM}}} 等变量在数据就绪入场时填充一次(本局定格);
+     全部数据与实时值见 http://127.0.0.1:端口/all ;
+     本文件可随意改样式(勿删脚本与变量), 同名 match.css 会被自动加载且优先级更高 -->
+<div class="frost"></div>
+<div id="wrap">
+  <div id="board">
+    <div class="battle" style="--rows:5;--n:5">
+      <div class="side-tag ct-tag" style="grid-row:1;grid-column:1">CT · {{MATCH.CT.TAG}}</div>
+      <div class="side-tag t-tag" style="grid-row:1;grid-column:3">T · {{MATCH.T.TAG}}</div>
+      <div class="pcard ct" style="--i:0;grid-row:2;grid-column:1">{{{CT.1.BADGE}}}<span class="nm{{CT.1.MECLASS}}">{{CT.1.NAME}}</span><span class="form">{{{CT.1.FORM}}</span></div>
+      <div class="pcard t" style="--i:0;grid-row:2;grid-column:3">{{{T.1.BADGE}}}<span class="nm{{T.1.MECLASS}}">{{T.1.NAME}}</span><span class="form">{{{T.1.FORM}}</span></div>
+      <div class="pcard ct" style="--i:1;grid-row:3;grid-column:1">{{{CT.2.BADGE}}}<span class="nm{{CT.2.MECLASS}}">{{CT.2.NAME}}</span><span class="form">{{{CT.2.FORM}}</span></div>
+      <div class="pcard t" style="--i:1;grid-row:3;grid-column:3">{{{T.2.BADGE}}}<span class="nm{{T.2.MECLASS}}">{{T.2.NAME}}</span><span class="form">{{{T.2.FORM}}</span></div>
+      <div class="pcard ct" style="--i:2;grid-row:4;grid-column:1">{{{CT.3.BADGE}}}<span class="nm{{CT.3.MECLASS}}">{{CT.3.NAME}}</span><span class="form">{{{CT.3.FORM}}</span></div>
+      <div class="pcard t" style="--i:2;grid-row:4;grid-column:3">{{{T.3.BADGE}}}<span class="nm{{T.3.MECLASS}}">{{T.3.NAME}}</span><span class="form">{{{T.3.FORM}}</span></div>
+      <div class="pcard ct" style="--i:3;grid-row:5;grid-column:1">{{{CT.4.BADGE}}}<span class="nm{{CT.4.MECLASS}}">{{CT.4.NAME}}</span><span class="form">{{{CT.4.FORM}}</span></div>
+      <div class="pcard t" style="--i:3;grid-row:5;grid-column:3">{{{T.4.BADGE}}}<span class="nm{{T.4.MECLASS}}">{{T.4.NAME}}</span><span class="form">{{{T.4.FORM}}</span></div>
+      <div class="pcard ct" style="--i:4;grid-row:6;grid-column:1">{{{CT.5.BADGE}}}<span class="nm{{CT.5.MECLASS}}">{{CT.5.NAME}}</span><span class="form">{{{CT.5.FORM}}</span></div>
+      <div class="pcard t" style="--i:4;grid-row:6;grid-column:3">{{{T.5.BADGE}}}<span class="nm{{T.5.MECLASS}}">{{T.5.NAME}}</span><span class="form">{{{T.5.FORM}}</span></div>
+      <div class="vs">VS</div>
+      <div class="avg ct-avg" style="grid-row:7;grid-column:1">均分 {{MATCH.CT.AVG}}</div>
+      <div class="avg t-avg" style="grid-row:7;grid-column:3">均分 {{MATCH.T.AVG}}</div>
+    </div>
+  </div>
+</div>
+<script>
+const POLL = 1500;
+const SLOW_POLL = 8000;      // 本局数据定格后, 只低速轮询以发现新一局
+const ROW_MS = 650, STAG_MS = 320;
+const WAIT_DATA_MS = 25000;  // 数据未齐的兜底入场时限
+const HOLD_MS = 5000;        // anim_exit 开启时入场后的停留时长
+
+// 磨砂底
+function frost(cls) {
+  document.body.classList.remove('frost-in', 'frost-out', 'frost-stay');
+  if (cls) { void document.body.offsetWidth; document.body.classList.add(cls); }
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// 官方 S 段图标按星级分四档: 0-9 普通(青蓝) / 10-24 金色 / 25-49 钻石 / >=50 魔王
+function sDiamondIcon(stars) {
+  const n = Math.max(0, Number(stars) || 0);
+  if (n >= 50) return '/assets/s-diamond-1.png';
+  if (n >= 25) return '/assets/s-gold-1.png';
+  if (n >= 10) return '/assets/s-silver-1.png';
+  return '/assets/s-brass-s21.png';
+}
+
+// 官方段位徽章(天梯页 rank-progress): 盾牌 + 六边形渐变边框进度环 + 字母; S 段钻石 + 星xN
+let RING_UID = 0;
+function rankBadgeHtml(p) {
+  if (p.rank_class === 'S') {
+    const n = Math.max(0, Number(p.stars) || 0);
+    return '<span class="s-rank"><img class="s-diamond" src="' + sDiamondIcon(n) + '" alt="S">'
+      + (n > 0 ? '<b class="s-n">x' + n + '</b>' : '') + '</span>';
+  }
+  const elite = String(p.rank_label || '').indexOf('精英') >= 0;
+  const cls = p.rank_class || 'U';
+  const c = elite
+    ? (cls === 'A' ? ['#d38c25','#fce9c0','#e5c17e','#f2d29a','#f3d49d']
+      : cls === 'B' ? ['#9f7230','#bca36c','#c1a76e','#b5975d','#b5975e']
+      : ['#674b1d','#947444','#b89156','#927243','#937343'])
+    : ['#4da2ff','#75d0a4','#7eff94','#6BC5BA','#77DBA0'];
+  const prog = Math.max(0, Math.min(1, Number(p.rank_progress) || 0));
+  const off = ' style="stroke-dashoffset:' + (prog * 324).toFixed(1) + '"';
+  const id = 'rg' + (++RING_UID);
+  const bg = elite ? cls + '11_bg.svg' : 'ABC_bg.svg';
+  const HEX = 'M71 125 L117.77 98 117.77 44 71 17 24.23 44 24.23 98 Z';
+  return '<span class="rank-badge">'
+    + '<img class="rb-bg" src="/assets/' + bg + '" alt="">'
+    + '<svg class="rb-ring" viewBox="0 0 142 142">'
+    + '<defs>'
+    + '<linearGradient id="' + id + 'l" x1="0" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="' + c[0] + '"/><stop offset="100%" stop-color="' + c[1] + '"/></linearGradient>'
+    + '<linearGradient id="' + id + 'r" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="' + c[1] + '"/><stop offset="100%" stop-color="' + c[2] + '"/></linearGradient>'
+    + '<linearGradient id="' + id + 't" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="' + c[3] + '"/><stop offset="100%" stop-color="' + c[4] + '"/></linearGradient>'
+    + '</defs>'
+    + '<polyline class="trk" points="71 125, 24.23 98, 24.23 44, 71 17" stroke="url(#' + id + 'l)"/>'
+    + '<polyline class="trk" points="71 17, 117.77 44, 117.77 98, 71 125" stroke="url(#' + id + 'r)"/>'
+    + '<polyline class="trk" points="24.23 44, 71 17, 117.77 44" stroke="url(#' + id + 't)"/>'
+    + '<path class="cov" d="' + HEX + '" pathLength="324"' + off + '/>'
+    + '<path class="fil' + (elite ? ' sup' : '') + '" d="' + HEX + '" pathLength="324"' + off + '/>'
+    + '</svg>'
+    + '<img class="rb-letter" src="' + esc(p.rank_icon) + '" alt="" onerror="this.remove()">'
+    + '</span>';
+}
+
+// ===== 变量表: 文本值 {{KEY}} + HTML 片段 {{{KEY}}} =====
+function buildVarMap(s){
+  const map = {};
+  const set = (k, v) => { map[k] = (v === undefined || v === null || v === '') ? '' : String(v); };
+  set('IN.MATCH', s.in_match ? '对局中' : '空闲');
+  // 数据插件变量: {{PLUGIN.<插件名>.<变量>}}
+  const pl = s.plugins || {};
+  for (const pname of Object.keys(pl)) {
+    for (const v of Object.keys(pl[pname])) {
+      set('PLUGIN.' + pname.toUpperCase() + '.' + v.toUpperCase(), pl[pname][v]);
+    }
+  }
+  const m = s.match_info;
+  if (m){
+    set('MATCH.MAP', String(m.map || '').replace(/^de_/, ''));
+    set('MATCH.SCORE.CT', m.ct_score);
+    set('MATCH.SCORE.T', m.t_score);
+    set('MATCH.HALF', (m.ct_half != null && m.t_half != null) ? m.ct_half + ':' + m.t_half : '');
+    for (const side of ['CT','T']){
+      const t = m.teams.find(x => x.side === side) || { players: [], avg_score: null, name: '' };
+      set('MATCH.' + side + '.AVG', t.avg_score);
+      set('MATCH.' + side + '.TAG', t.name === m.my_side ? '我方' : '对方');
+      for (let i = 0; i < 5; i++){
+        const p = t.players[i] || {};
+        const k = 'MATCH.' + side + '.' + (i + 1) + '.';
+        set(k + 'NAME', p.name);
+        set(k + 'RANK', p.rank_label);
+        set(k + 'RANK.ICON', p.rank_icon);
+        set(k + 'SCORE', p.rank_score);
+        set(k + 'STARS', p.stars);
+        set(k + 'FORM', (p.form || []).map(r => r ? 'W' : 'L').join(''));
+        set(k + 'KDA', (p.kill ?? 0) + '/' + (p.death ?? 0) + '/' + (p.assist ?? 0));
+        set(k + 'ADR', p.adr == null ? '' : Number(p.adr).toFixed(1));
+        set(k + 'ME', p.is_me ? '★ ' : '');
+        set(k + 'MECLASS', p.is_me ? ' me' : '');
+      }
+    }
+  }
+  // 简写别名: {{CT.1.NAME}} 等价 {{MATCH.CT.1.NAME}}
+  for (const k of Object.keys(map)) {
+    if (k.startsWith('MATCH.CT.') || k.startsWith('MATCH.T.')) map[k.slice(6)] = map[k];
+  }
+  return map;
+}
+
+// HTML 片段变量表: 每位玩家的官方段位徽章 + 近五场 W/L 着色块
+function buildRawMap(s){
+  const raw = {};
+  const m = s.match_info;
+  if (m) for (const side of ['CT','T']){
+    const t = m.teams.find(x => x.side === side);
+    if (!t) continue;
+    t.players.forEach((p, i) => {
+      if (i < 5) {
+        const k = 'MATCH.' + side + '.' + (i + 1);
+        raw[k + '.BADGE'] = rankBadgeHtml(p);
+        raw[k + '.FORM'] = (p.form || []).map(r => r ? '<i class="w">W</i>' : '<i class="l">L</i>').join('');
+        raw[k.slice(6) + '.BADGE'] = raw[k + '.BADGE']; // 简写别名 {{{CT.1.BADGE}}}
+        raw[k.slice(6) + '.FORM'] = raw[k + '.FORM'];
+      }
+    });
+  }
+  return raw;
+}
+
+// 首次为含 {{ 的文本节点/属性保存原始模板, 之后每轮按模板重填
+let varSnapshotted = false;
+function snapshotVarTemplates(){
+  if (varSnapshotted) return;
+  varSnapshotted = true;
+  const rx = /\{\{\s*[A-Z0-9_.{}]+\s*\}\}/;
+  const texts = [];
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()){ if (rx.test(walker.currentNode.nodeValue)) texts.push(walker.currentNode); }
+  for (const n of texts){
+    if (n.nodeValue.indexOf('{{{') >= 0) n.__tplRaw = n.nodeValue;
+    else n.__tpl = n.nodeValue;
+  }
+  for (const el of document.body.querySelectorAll('*')){
+    for (const a of [...el.attributes]){
+      if (rx.test(a.value)) el.dataset['tpl_' + a.name] = a.value;
+    }
+  }
+}
+
+function applyVars(map, raw){
+  snapshotVarTemplates();
+  const rxRaw = /\{\{\{([A-Z0-9_.]+)\}\}\}/g;
+  const rx = /\{\{\s*([A-Z0-9_.]+)\s*\}\}/g;
+  const fill = t => t
+    .replace(rxRaw, (_, k) => (raw && raw[k] !== undefined) ? raw[k] : '')
+    .replace(rx, (_, k) => map[k] !== undefined ? map[k] : '');
+  const texts = [];
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) texts.push(walker.currentNode);
+  for (const n of texts){
+    const tpl = n.__tpl;
+    if (tpl === undefined) continue;
+    n.nodeValue = fill(tpl);
+  }
+  const raws = [];
+  const walker2 = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  while (walker2.nextNode()){ if (walker2.currentNode.__tplRaw !== undefined) raws.push(walker2.currentNode); }
+  for (const n of raws){
+    if (!n.isConnected) continue;
+    const tmp = document.createElement('div');
+    tmp.innerHTML = fill(n.__tplRaw);
+    while (tmp.firstChild) n.parentNode.insertBefore(tmp.firstChild, n);
+    n.parentNode.removeChild(n);
+  }
+  for (const el of document.body.querySelectorAll('*')){
+    for (const a of [...el.attributes]){
+      const tpl = el.dataset['tpl_' + a.name];
+      if (tpl === undefined) continue;
+      el.setAttribute(a.name, fill(tpl));
+    }
+  }
+}
+
+// 对局板流程: 等两队各满5人且数据就绪 -> 入场动画 -> (anim_exit: 停5秒倒序退场 / 否则常驻到下一局)
+let curEpoch = null;
+let shownMatchId = null;
+let showing = false;
+let waitingSince = 0;
+let boardState = '';
+let animTimers = [];
+let pollTimer = null;
+const pristineBoard = document.getElementById('board').innerHTML;
+
+function clearAnimTimers() { animTimers.forEach(clearTimeout); animTimers = []; }
+function scheduleNext(ms) { if (pollTimer) clearTimeout(pollTimer); pollTimer = setTimeout(refresh, ms); }
+
+function resetOnEpoch(epoch) {
+  curEpoch = epoch;
+  clearAnimTimers();
+  showing = false;
+  waitingSince = 0;
+  shownMatchId = null;
+  boardState = '';
+  varSnapshotted = false;
+  document.getElementById('board').innerHTML = pristineBoard;
+  const b = document.getElementById('board');
+  if (b) b.classList.remove('in', 'settled', 'out');
+  frost('');
+}
+
+function teamsFull(m) {
+  return !!m && m.teams.length === 2 && m.teams.every(t => t.players.length === 5);
+}
+function matchDataReady(s) {
+  const m = s.match_info;
+  if (!m) return false;
+  return m.teams.every(t => t.players.every(p => !p.rank_loading && p.form && p.form.length > 0));
+}
+
+function refresh() {
+  fetch('/api/state', { cache: 'no-store' }).then(r => r.json()).then(s => {
+    if (curEpoch !== null && s.cfg_epoch !== curEpoch) resetOnEpoch(s.cfg_epoch);
+    curEpoch = s.cfg_epoch;
+
+    const m = (s.in_match && s.match_info) ? s.match_info : null;
+    if (m) {
+      if (showing) { scheduleNext(POLL); return; }
+      if (m.match_id === shownMatchId) { scheduleNext(SLOW_POLL); return; }
+      if (!waitingSince) waitingSince = Date.now();
+      const waited = Date.now() - waitingSince;
+      const ready = teamsFull(m) && (matchDataReady(s) || waited > WAIT_DATA_MS);
+      if (!ready) { scheduleNext(POLL); return; }
+      waitingSince = 0;
+      shownMatchId = m.match_id;
+      showing = true;
+      clearAnimTimers();
+      const map = buildVarMap(s);
+      applyVars(map, buildRawMap(s)); // 开局抓取一次, 本局定格
+      // 任一侧无平均分则两侧均不展示
+      const hasAvg = !!(map['MATCH.CT.AVG'] && map['MATCH.T.AVG']);
+      document.querySelectorAll('#board .avg').forEach(el => { el.style.display = hasAvg ? '' : 'none'; });
+      document.getElementById('board').style.visibility = '';
+      matchRows = 5;
+      const b = document.getElementById('board');
+      const vsDelay = (matchRows - 1) * STAG_MS + ROW_MS + 150;
+      b.style.setProperty('--vsd', (vsDelay / 1000) + 's');
+      b.classList.remove('settled', 'out');
+      void b.offsetWidth;
+      b.classList.add('in');
+      frost('frost-in');
+      animTimers.push(setTimeout(() => {
+        settleBoard();
+        if (s.anim_exit) animTimers.push(setTimeout(playExit, HOLD_MS));
+        else showing = false;
+      }, vsDelay + 500));
+      scheduleNext(SLOW_POLL);
+    } else if (!showing) {
+      waitingSince = 0;
+      const b = document.getElementById('board');
+      if (b && b.classList.contains('in')) settleBoard();
+      scheduleNext(SLOW_POLL);
+    } else {
+      scheduleNext(SLOW_POLL);
+    }
+  }).catch(() => {
+    scheduleNext(SLOW_POLL);
+  });
+}
+
+function settleBoard() {
+  boardState = 'settled';
+  const b = document.getElementById('board');
+  if (b) { b.classList.remove('in'); b.classList.add('settled'); }
+  frost('frost-stay');
+}
+function playExit() {
+  const b = document.getElementById('board');
+  if (!b) { showing = false; frost(''); return; }
+  boardState = 'out';
+  b.classList.remove('in', 'settled');
+  b.classList.add('out');
+  frost('frost-out');
+  animTimers.push(setTimeout(() => {
+    boardState = '';
+    showing = false;
+    frost('');
+  }, (matchRows - 1) * 240 + 500 + 150));
+}
+
+// 对局板按 1920x1080 设计并整体等比放大 20%; 视口更小时按 1600x900 基准等比缩小
+function fitScale() {
+  document.getElementById('wrap').classList.add('center');
+  const fit = Math.min(1.2, window.innerWidth / 1600, window.innerHeight / 900);
+  document.getElementById('wrap').style.zoom = fit;
+}
+fitScale();
+window.addEventListener('resize', fitScale);
+
+// 首次数据到达前隐藏空板
+document.getElementById('board').style.visibility = 'hidden';
+
+scheduleNext(0);
+</script>
+</body>
+</html>
