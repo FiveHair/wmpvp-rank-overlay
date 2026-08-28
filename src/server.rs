@@ -13,7 +13,7 @@ use axum::{
     extract::State as AxumState,
     http::{header, StatusCode},
     response::IntoResponse,
-    routing::{get, post},
+    routing::get,
     Json, Router,
 };
 

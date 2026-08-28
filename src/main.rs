@@ -224,16 +224,17 @@ fn main() -> anyhow::Result<()> {
 
     let (cfg_tx, state) = start_service(initial)?;
 
+    // 固定尺寸窗口(最小=最大限制拉伸); 窗口位置由 eframe 自带持久化记住(正常关闭后恢复)
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([520.0, 640.0])
-            .with_resizable(false)
+            .with_min_inner_size([520.0, 640.0])
             .with_title("完美段位监控"),
         ..Default::default()
     };
     let app = OverlayApp::new(cfg_tx, state, log_buf, file);
     // glow 后端的错误类型非 Send, 不能用 ? 直接透传给 anyhow
-    if let Err(e) = eframe::run_native(
+    match eframe::run_native(
         "wmpvp-rank-overlay",
         options,
         Box::new(move |cc| {
@@ -242,9 +243,16 @@ fn main() -> anyhow::Result<()> {
             Ok(Box::new(app))
         }),
     ) {
-        return Err(anyhow::anyhow!("eframe 运行错误: {e}"));
+        Ok(()) => {
+            // 直接结束进程: 后台 tokio runtime/WS 等待收尾会拖慢退出, 状态已在上面保存
+            std::process::exit(0);
+        }
+        Err(e) => {
+            use std::io::Write as _;
+            let _ = writeln!(std::io::stderr(), "eframe 运行错误: {e}");
+            std::process::exit(1);
+        }
     }
-    Ok(())
 }
 
 // ================= 深色主题 =================
