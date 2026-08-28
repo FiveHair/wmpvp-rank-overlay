@@ -223,8 +223,15 @@ function snapshotVarTemplates(){
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   while (walker.nextNode()){ if (rx.test(walker.currentNode.nodeValue)) texts.push(walker.currentNode); }
   for (const n of texts){
-    if (n.nodeValue.indexOf('{{{') >= 0) n.__tplRaw = n.nodeValue;
-    else n.__tpl = n.nodeValue;
+    if (n.nodeValue.indexOf('{{{') >= 0) {
+      // 片段变量用持久占位 span 承载(文本节点填充后即被 DOM 替换), 每轮可重填
+      const holder = document.createElement('span');
+      holder.className = 'tpl-raw';
+      holder.__tplRaw = n.nodeValue;
+      n.parentNode.replaceChild(holder, n);
+    } else {
+      n.__tpl = n.nodeValue;
+    }
   }
   for (const el of document.body.querySelectorAll('*')){
     for (const a of [...el.attributes]){
@@ -248,15 +255,11 @@ function applyVars(map, raw){
     if (tpl === undefined) continue;
     n.nodeValue = fill(tpl);
   }
-  const raws = [];
-  const walker2 = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-  while (walker2.nextNode()){ if (walker2.currentNode.__tplRaw !== undefined) raws.push(walker2.currentNode); }
-  for (const n of raws){
-    if (!n.isConnected) continue;
+  for (const el of document.body.querySelectorAll('span.tpl-raw')){
+    if (!el.isConnected) continue;
     const tmp = document.createElement('div');
-    tmp.innerHTML = fill(n.__tplRaw);
-    while (tmp.firstChild) n.parentNode.insertBefore(tmp.firstChild, n);
-    n.parentNode.removeChild(n);
+    tmp.innerHTML = fill(el.__tplRaw);
+    el.replaceChildren(...tmp.childNodes);
   }
   for (const el of document.body.querySelectorAll('*')){
     for (const a of [...el.attributes]){

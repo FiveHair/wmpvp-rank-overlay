@@ -145,8 +145,8 @@ pub async fn run(
             map: "de_mirage".to_string(),
             ct_score: 4,
             t_score: 3,
-            ct_half: Some(3),
-            t_half: Some(2),
+            ct_half: None,
+            t_half: None,
             players,
         });
         *state.updated_at.lock().await = now_millis();
@@ -161,12 +161,14 @@ pub async fn run(
                 if m.ct_score % 3 == 0 {
                     m.t_score += 1;
                 }
-                // 模拟半场警匪互换: 中段翻转双方阵营, my_side 随之变化,
-                // 前端检测到后用开局冻结数据重播一次对阵(CT/T 互换)
+                // 模拟半场警匪互换: 中段翻转双方阵营; 平台在下半场才开始推送
+                // ctHalfScore/terroristHalfScore, 这里同步置 Some 供前端检测
                 if tick == 3 {
                     for p in m.players.iter_mut() {
                         p.side = if p.side == "CT" { "T" } else { "CT" }.to_string();
                     }
+                    m.ct_half = Some(0);
+                    m.t_half = Some(0);
                     tracing::info!(round, "mock: 半场警匪互换");
                 }
             }

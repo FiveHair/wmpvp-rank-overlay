@@ -262,8 +262,15 @@ function snapshotVarTemplates(){
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   while (walker.nextNode()){ if (rx.test(walker.currentNode.nodeValue)) texts.push(walker.currentNode); }
   for (const n of texts){
-    if (n.nodeValue.indexOf('{{{') >= 0) n.__tplRaw = n.nodeValue;
-    else n.__tpl = n.nodeValue;
+    if (n.nodeValue.indexOf('{{{') >= 0) {
+      // 片段变量用持久占位 span 承载(文本节点填充后即被 DOM 替换), 每轮可重填
+      const holder = document.createElement('span');
+      holder.className = 'tpl-raw';
+      holder.__tplRaw = n.nodeValue;
+      n.parentNode.replaceChild(holder, n);
+    } else {
+      n.__tpl = n.nodeValue;
+    }
   }
   for (const el of document.body.querySelectorAll('*')){
     for (const a of [...el.attributes]){
@@ -287,15 +294,11 @@ function applyVars(map, raw){
     if (tpl === undefined) continue;
     n.nodeValue = fill(tpl);
   }
-  const raws = [];
-  const walker2 = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-  while (walker2.nextNode()){ if (walker2.currentNode.__tplRaw !== undefined) raws.push(walker2.currentNode); }
-  for (const n of raws){
-    if (!n.isConnected) continue;
+  for (const el of document.body.querySelectorAll('span.tpl-raw')){
+    if (!el.isConnected) continue;
     const tmp = document.createElement('div');
-    tmp.innerHTML = fill(n.__tplRaw);
-    while (tmp.firstChild) n.parentNode.insertBefore(tmp.firstChild, n);
-    n.parentNode.removeChild(n);
+    tmp.innerHTML = fill(el.__tplRaw);
+    el.replaceChildren(...tmp.childNodes);
   }
   for (const el of document.body.querySelectorAll('*')){
     for (const a of [...el.attributes]){
@@ -315,8 +318,8 @@ let boardState = '';
 let animTimers = [];
 let pollTimer = null;
 const pristineBoard = document.getElementById('board').innerHTML;
-// 开局冻结: 变量表 + 我方阵营(半场互换检测与重播用)
-let entryMap = null, entryRaw = null, entryMySide = null, halftimeDone = false;
+// 开局冻结: 变量表 + 我方阵营 + 下半场字段是否已出现(半场互换检测用)
+let entryMap = null, entryRaw = null, entryMySide = null, entryHalfSeen = false, halftimeDone = false;
 
 function clearAnimTimers() { animTimers.forEach(clearTimeout); animTimers = []; }
 function scheduleNext(ms) { if (pollTimer) clearTimeout(pollTimer); pollTimer = setTimeout(refresh, ms); }
@@ -342,7 +345,7 @@ function resetOnEpoch(epoch) {
   shownMatchId = null;
   boardState = '';
   varSnapshotted = false;
-  entryMap = null; entryRaw = null; entryMySide = null; halftimeDone = false;
+  entryMap = null; entryRaw = null; entryMySide = null; entryHalfSeen = false; halftimeDone = false;
   document.getElementById('board').innerHTML = pristineBoard;
   const b = document.getElementById('board');
   if (b) b.classList.remove('in', 'settled', 'out');
@@ -379,9 +382,13 @@ function refresh() {
 
     const m = (s.in_match && s.match_info) ? s.match_info : null;
     if (m) {
-      // 半场警匪互换检测: 本局内 my_side 与开局不一致 -> 用开局冻结数据重播一次, CT/T 互换
-      if (m.match_id === shownMatchId && entryMap && !halftimeDone
-        && m.my_side && entryMySide && m.my_side !== entryMySide) {
+      // 半场警匪互换检测: 平台进入下半场后才推送 ctHalfScore/terroristHalfScore(开局为空),
+      // 以字段出现为主信号; 若开局就有字段则退回 my_side 翻转检测。
+      // 触发后用开局冻结数据重播一次入场, CT/T 互换, 每局仅一次
+      const halfSeen = m.ct_half != null && m.t_half != null;
+      const halfTrigger = (halfSeen && !entryHalfSeen)
+        || (entryHalfSeen && m.my_side && entryMySide && m.my_side !== entryMySide);
+      if (m.match_id === shownMatchId && entryMap && !halftimeDone && halfTrigger) {
         halftimeDone = true;
         const [m2, r2] = swapSides(entryMap, entryRaw);
         playBoard(m2, r2, s.anim_exit);
@@ -399,6 +406,7 @@ function refresh() {
       entryMap = buildVarMap(s);
       entryRaw = buildRawMap(s);
       entryMySide = m.my_side || null;
+      entryHalfSeen = m.ct_half != null && m.t_half != null;
       halftimeDone = false;
       playBoard(entryMap, entryRaw, s.anim_exit);
       scheduleNext(SLOW_POLL);

@@ -725,7 +725,7 @@ impl eframe::App for OverlayApp {
                 _ => {}
             }
         }
-        // 托盘图标整块底色 + tooltip 随 WS 状态变化
+        // 托盘图标整块底色 + 标题栏同步显示 WS 状态
         let ws_status = self
             .state
             .my
@@ -742,8 +742,10 @@ impl eframe::App for OverlayApp {
                 if let Err(e) = t.set_tooltip(Some(tip)) {
                     tracing::warn!(error = %e, "托盘提示更新失败");
                 }
-                tracing::info!(status = %ws_status, "托盘图标状态更新");
             }
+            // 状态同步到设置窗口标题栏
+            let title = format!("完美段位监控 - {}", status_text(&ws_status));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Title(title));
         }
         // 关闭窗口 -> 直接退出程序(单实例锁随进程释放)
         if ctx.input(|i| i.viewport().close_requested()) && !self.quit {
