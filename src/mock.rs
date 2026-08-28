@@ -170,6 +170,8 @@ pub async fn run(
         state.my.lock().await.ws_status = "idle".to_string();
         *state.updated_at.lock().await = now_millis();
         tracing::info!(round, "mock: 对局结束");
+        // 空闲间隙: 让托盘图标/状态胶囊可见地在 蓝(对局) ↔ 绿(空闲) 间循环
+        sleep(Duration::from_secs(8)).await;
     }
 }
 

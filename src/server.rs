@@ -78,9 +78,25 @@ pub async fn serve(
                 r?;
                 return Ok(());
             }
-            _ = cfg_rx.changed() => {
+            // 等待端口真正变化才重启; 其他配置变化(mock/token/steamId)不影响面板服务
+            _ = wait_port_change(&mut cfg_rx, port) => {
                 tracing::info!("端口配置已变化, 重启面板");
             }
+        }
+    }
+}
+
+/// 端口变化时返回; 其他配置字段变化忽略
+async fn wait_port_change(
+    cfg_rx: &mut tokio::sync::watch::Receiver<Arc<crate::monitor::MonitorConfig>>,
+    cur: u16,
+) {
+    loop {
+        if cfg_rx.changed().await.is_err() {
+            return;
+        }
+        if cfg_rx.borrow().port != cur {
+            return;
         }
     }
 }

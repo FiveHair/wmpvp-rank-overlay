@@ -1,28 +1,39 @@
 @echo off
-rem ç¼–è¯‘å¹¶ç»„è£…äº§ç‰©ç›®å½• dist\ (åªä¿ç•™è¿è¡Œæ‰€éœ€: exe + web + plugins + å·²æœ‰ config.json)
+rem ±àÒë²¢×é×°²úÎïÄ¿Â¼ dist\ (Ö»±£ÁôÔËĞĞËùĞè: exe + web + plugins + ÒÑÓĞ config.json)
 cd /d %~dp0
+
+rem ¹¤¾ßÁ´: cargo Ä¬ÈÏ°²×°Î»ÖÃ + MinGW(GNU ¹¤¾ßÁ´ĞèÒª gcc/dlltool)
+if exist "%USERPROFILE%\.cargo\bin\cargo.exe" set "PATH=%USERPROFILE%\.cargo\bin;%PATH%"
+if exist "C:\msys64\mingw64\bin" set "PATH=C:\msys64\mingw64\bin;%PATH%"
+if exist "C:\msys64\ucrt64\bin" set "PATH=C:\msys64\ucrt64\bin;%PATH%"
+
 where cargo >nul 2>nul
 if errorlevel 1 (
-    echo æœªæ‰¾åˆ° cargo, è¯·å…ˆå®‰è£… Rust: https://rustup.rs/
+    echo [´íÎó] Î´ÕÒµ½ cargo, ÇëÈ·ÈÏ Rust ÒÑ°²×°»òĞŞ¸Ä±¾ÎÄ¼şµÄÂ·¾¶ÉèÖÃ
     pause
     exit /b 1
 )
-echo [1/3] ç¼–è¯‘ä¸­...
+
+echo [1/3] ±àÒëÖĞ...
 cargo build --release
 if errorlevel 1 (
-    echo ç¼–è¯‘å¤±è´¥
+    echo [´íÎó] ±àÒëÊ§°Ü
     pause
     exit /b 1
 )
-echo [2/3] å…³é—­è¿è¡Œä¸­çš„å®ä¾‹...
+
+echo [2/3] ¹Ø±ÕÔËĞĞÖĞµÄÊµÀı...
 taskkill /IM wmpvp-rank-overlay.exe /F >nul 2>&1
-echo [3/3] ç»„è£… dist\...
+
+echo [3/3] ×é×° dist\...
 if not exist dist\plugins mkdir dist\plugins
+if not exist dist\web mkdir dist\web
 copy /Y target\release\wmpvp-rank-overlay.exe dist\ >nul
 xcopy /E /I /Y web dist\web >nul
-rem æœ¬åœ°è¦†ç›–å±‚(ä¸å…¥åº“, å­˜åœ¨åˆ™è¦†ç›–åŒåé¡µé¢)
+rem ±¾µØ¸²¸Ç²ã(²»Èë¿â, ´æÔÚÔò¸²¸ÇÍ¬ÃûÒ³Ãæ)
 if exist web.local xcopy /E /I /Y web.local dist\web >nul
 xcopy /E /I /Y plugins dist\plugins >nul
+
 echo.
-echo å®Œæˆ: dist\wmpvp-rank-overlay.exe
+echo [Íê³É] dist\wmpvp-rank-overlay.exe
 pause

@@ -152,11 +152,8 @@ async fn run_plugin(
     };
     let mut sim: HashMap<String, i64> = HashMap::new();
     loop {
-        let (mock_out, sid) = {
-            let c = cfg_rx.borrow();
-            (c.mock && c.mock_plugins, c.steam_id.trim().to_string())
-        };
-        // 模拟输出: 不真实抓取, 各变量输出随机递增的模拟值(便于调试前端展示/动画)
+        // 调试模式下插件直接输出随机递增的模拟值, 不真实抓取(便于调试前端展示/动画)
+        let mock_out = cfg_rx.borrow().mock;
         if mock_out {
             let ns = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -188,6 +185,7 @@ async fn run_plugin(
             }
             continue;
         }
+        let sid = cfg_rx.borrow().steam_id.trim().to_string();
         if !is_file && sid.is_empty() {
             tokio::select! {
                 _ = sleep(Duration::from_secs(60)) => {}
