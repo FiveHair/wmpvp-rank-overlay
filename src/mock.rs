@@ -165,8 +165,9 @@ pub async fn run(
             *state.updated_at.lock().await = now_millis();
         }
 
-        // ---- 结束: 清对局, 前端播出场动画后回空闲 ----
+        // ---- 结束: 清对局回空闲, 前端播出场动画后回空闲 ----
         *state.match_state.lock().await = None;
+        state.my.lock().await.ws_status = "idle".to_string();
         *state.updated_at.lock().await = now_millis();
         tracing::info!(round, "mock: 对局结束");
     }

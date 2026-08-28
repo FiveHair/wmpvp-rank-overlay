@@ -425,9 +425,10 @@ struct OverlayApp {
     msg: Option<(bool, String)>,
     quit: bool,
     show_window: bool,
-    was_minimized: bool,
     _tray: Option<tray_icon::TrayIcon>,
     tray_ids: (tray_icon::menu::MenuId, tray_icon::menu::MenuId),
+    /// 托盘图标当前表示的 WS 状态(变化时换图标边框色)
+    tray_status: String,
 }
 
 impl OverlayApp {
@@ -450,9 +451,9 @@ impl OverlayApp {
             msg: None,
             quit: false,
             show_window: true,
-            was_minimized: false,
             _tray: tray,
             tray_ids,
+            tray_status: String::new(),
         }
     }
 
@@ -641,7 +642,6 @@ impl OverlayApp {
 
         ui.add_space(6.0);
         ui.separator();
-        ui.label(egui::RichText::new("右键托盘图标可退出。").small().weak());
 
         // ---------- 日志面板(实时输出, 自动滚到底, 填满窗口剩余高度) ----------
         ui.add_space(4.0);
@@ -733,14 +733,20 @@ impl eframe::App for OverlayApp {
                 _ => {}
             }
         }
-        // 最小化 -> 缩到托盘(只触发一次)
-        let minimized = ctx.input(|i| i.viewport().minimized) == Some(true);
-        if minimized && !self.was_minimized {
-            self.was_minimized = true;
-            self.show_window = false;
-            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
-        } else if !minimized {
-            self.was_minimized = false;
+        // 托盘图标边框色随 WS 状态变化
+        let ws_status = self
+            .state
+            .my
+            .try_lock()
+            .map(|m| m.ws_status.clone())
+            .unwrap_or_default();
+        if ws_status != self.tray_status {
+            self.tray_status = ws_status.clone();
+            if let Some(t) = &self._tray {
+                if let Err(e) = t.set_icon(Some(make_tray_icon(Some(&ws_status)))) {
+                    tracing::warn!(error = %e, "托盘图标更新失败");
+                }
+            }
         }
         // 关闭窗口 -> 直接退出程序(单实例锁随进程释放)
         if ctx.input(|i| i.viewport().close_requested()) && !self.quit {
@@ -804,7 +810,7 @@ fn build_tray() -> (
         // 菜单仅右键弹出; 左键单击/双击只开窗口(见 logic 里的 TrayIconEvent)
         .with_menu_on_left_click(false)
         .with_tooltip("完美段位监控 - OBS 覆盖层")
-        .with_icon(make_tray_icon())
+        .with_icon(make_tray_icon(None))
         .build();
     match tray {
         Ok(t) => (Some(t), (show_id, quit_id)),
@@ -815,14 +821,21 @@ fn build_tray() -> (
     }
 }
 
-/// 代码生成 32x32 托盘图标: 深蓝圆角底 + 金色边框 + 白色 S。
-fn make_tray_icon() -> tray_icon::Icon {
+/// 代码生成 32x32 托盘图标: 深蓝圆角底 + 白色 S + 状态色边框。
+/// status=None 时用默认金色; 有状态时边框颜色表示 WS 状态(复用 status_color)。
+fn make_tray_icon(status: Option<&str>) -> tray_icon::Icon {
     const W: usize = 32;
     const H: usize = 32;
     const R: f32 = 7.0;
     let mut px = vec![0u8; W * H * 4];
     let bg = [22, 32, 46, 255];
-    let border = [255, 213, 107, 255];
+    let border = match status {
+        Some(s) => {
+            let c = status_color(s);
+            [c.r(), c.g(), c.b(), 255]
+        }
+        None => [255, 213, 107, 255],
+    };
     let letter = [240, 244, 248, 255];
 
     for y in 0..H {
