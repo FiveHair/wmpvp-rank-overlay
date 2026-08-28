@@ -3,7 +3,7 @@
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use tokio::sync::Mutex;
 
 use crate::form::FormService;
@@ -85,6 +85,8 @@ pub struct AppState {
     pub plugins: Mutex<HashMap<String, HashMap<String, String>>>,
     /// 数据日志(data.log): WS 流/击杀/账号原始数据输出, 供插件读取
     pub datalog: std::sync::Mutex<crate::datalog::DataLog>,
+    /// 对局板是否正在展示(match 页报告)
+    board_showing: AtomicBool,
     /// 配置代号: 每次保存并应用时递增, 前端据此重置展示状态
     cfg_epoch: AtomicU64,
 }
@@ -98,8 +100,17 @@ impl AppState {
             avatar: Mutex::new(None),
             plugins: Mutex::new(HashMap::new()),
             datalog: std::sync::Mutex::new(crate::datalog::DataLog::create()),
+            board_showing: AtomicBool::new(false),
             cfg_epoch: AtomicU64::new(1),
         })
+    }
+
+    pub fn set_board_showing(&self, on: bool) {
+        self.board_showing.store(on, Ordering::SeqCst);
+    }
+
+    pub fn board_showing(&self) -> bool {
+        self.board_showing.load(Ordering::SeqCst)
     }
 
     pub fn bump_cfg_epoch(&self) {
@@ -130,6 +141,8 @@ pub struct ApiState {
     pub cfg_epoch: u64,
     /// 对局板动画退出(入场播完展示5秒后倒序退场); false = 一直展示
     pub anim_exit: bool,
+    /// 对局板当前是否正在展示(match 页报告; 账号卡据此隐藏自己, OBS 中等同隐藏源)
+    pub board_showing: bool,
     /// 数据插件产出: 插件名 -> (变量名 -> 值)
     pub plugins: HashMap<String, HashMap<String, String>>,
 }
@@ -298,6 +311,7 @@ pub async fn build_api_state(
         match_info,
         updated_at,
         anim_exit,
+        board_showing: state.board_showing(),
         cfg_epoch: state.cfg_epoch(),
         plugins: state.plugins.lock().await.clone(),
     }

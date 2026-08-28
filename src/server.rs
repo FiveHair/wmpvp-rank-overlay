@@ -13,7 +13,7 @@ use axum::{
     extract::State as AxumState,
     http::{header, StatusCode},
     response::IntoResponse,
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 
@@ -48,6 +48,10 @@ pub async fn serve(
         .route("/assets/:name", get(asset))
         .route("/assets/avatar.png", get(avatar_png))
         .route("/api/state", get(api_state))
+        .route(
+            "/api/board_showing",
+            get(board_showing_get).post(board_showing_set),
+        )
         // web/ 下与页面同名的定制样式: /account.css、/match.css
         .route("/:name", get(web_css))
         .with_state(ctx);
@@ -180,6 +184,25 @@ async fn api_state(
     let anim_exit = ctx.cfg.borrow().anim_exit;
     let api = build_api_state(&ctx.app, &ctx.ranks, &ctx.forms, anim_exit).await;
     Json(api)
+}
+
+#[derive(serde::Deserialize)]
+struct BoardShowingIn {
+    showing: bool,
+}
+
+/// match 页上报对局板展示状态
+async fn board_showing_set(
+    AxumState(ctx): AxumState<Arc<ServerCtx>>,
+    Json(b): Json<BoardShowingIn>,
+) -> impl IntoResponse {
+    ctx.app.set_board_showing(b.showing);
+    StatusCode::OK
+}
+
+/// 账号卡快速轮询对局板展示状态(轻量, 400ms 级别)
+async fn board_showing_get(AxumState(ctx): AxumState<Arc<ServerCtx>>) -> impl IntoResponse {
+    Json(serde_json::json!({ "showing": ctx.app.board_showing() }))
 }
 
 /// 本地缓存的头像 PNG(由 monitor 下载自完美 CDN)。

@@ -319,6 +319,19 @@ const pristineBoard = document.getElementById('board').innerHTML;
 function clearAnimTimers() { animTimers.forEach(clearTimeout); animTimers = []; }
 function scheduleNext(ms) { if (pollTimer) clearTimeout(pollTimer); pollTimer = setTimeout(refresh, ms); }
 
+// 对局板展示状态上报: 账号卡读到后在 OBS 中隐藏自己(等同隐藏源)
+let reportedShowing = null;
+function reportShowing(on) {
+  if (reportedShowing === on) return;
+  reportedShowing = on;
+  fetch('/api/board_showing', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ showing: on }),
+    keepalive: true,
+  }).catch(() => {});
+}
+
 function resetOnEpoch(epoch) {
   curEpoch = epoch;
   clearAnimTimers();
@@ -331,6 +344,7 @@ function resetOnEpoch(epoch) {
   const b = document.getElementById('board');
   if (b) b.classList.remove('in', 'settled', 'out');
   frost('');
+  reportShowing(false);
 }
 
 function teamsFull(m) {
@@ -376,6 +390,7 @@ function refresh() {
       void b.offsetWidth;
       b.classList.add('in');
       frost('frost-in');
+      reportShowing(true);
       animTimers.push(setTimeout(() => {
         settleBoard();
         if (s.anim_exit) animTimers.push(setTimeout(playExit, HOLD_MS));
@@ -412,6 +427,7 @@ function playExit() {
     boardState = '';
     showing = false;
     frost('');
+    reportShowing(false);
   }, (matchRows - 1) * 240 + 500 + 150));
 }
 
@@ -428,6 +444,8 @@ window.addEventListener('resize', fitScale);
 document.getElementById('board').style.visibility = 'hidden';
 
 scheduleNext(0);
-</script>
+// 页面被关闭/刷新时兜底恢复账号卡显示
+window.addEventListener('pagehide', () => reportShowing(false));
+window.addEventListener('beforeunload', () => reportShowing(false));</script>
 </body>
 </html>

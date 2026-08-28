@@ -604,7 +604,6 @@ impl OverlayApp {
                 ui.checkbox(&mut self.file.mock, "调试模式(占位数据)")
                     .on_hover_text("开启后本程序与插件全部使用占位/模拟数据, 保存并应用后立即切换; 不访问任何完美接口");
                 ui.end_row();
-                ui.end_row();
                 ui.label("对局板退出");
                 ui.checkbox(&mut self.file.anim_exit, "入场播完 5 秒后自动退出动画")
                     .on_hover_text("勾选: 对局板入场动画播完展示 5 秒后倒序播放退出动画; 不勾选: 一直展示直到下一局");
@@ -726,7 +725,7 @@ impl eframe::App for OverlayApp {
                 _ => {}
             }
         }
-        // 托盘图标边框色随 WS 状态变化
+        // 托盘图标整块底色 + tooltip 随 WS 状态变化
         let ws_status = self
             .state
             .my
@@ -739,6 +738,11 @@ impl eframe::App for OverlayApp {
                 if let Err(e) = t.set_icon(Some(make_tray_icon(Some(&ws_status)))) {
                     tracing::warn!(error = %e, "托盘图标更新失败");
                 }
+                let tip = format!("完美段位监控 - {}", status_text(&ws_status));
+                if let Err(e) = t.set_tooltip(Some(tip)) {
+                    tracing::warn!(error = %e, "托盘提示更新失败");
+                }
+                tracing::info!(status = %ws_status, "托盘图标状态更新");
             }
         }
         // 关闭窗口 -> 直接退出程序(单实例锁随进程释放)
@@ -814,22 +818,21 @@ fn build_tray() -> (
     }
 }
 
-/// 代码生成 32x32 托盘图标: 深蓝圆角底 + 白色 S + 状态色边框。
-/// status=None 时用默认金色; 有状态时边框颜色表示 WS 状态(复用 status_color)。
+/// 代码生成 32x32 托盘图标: 整块状态色底 + 白边 + 深色 S。
+/// 任务栏以 16px 渲染, 细边框看不出变化, 所以用整块底色表达 WS 状态:
+/// 对局蓝 / 空闲绿 / 连接金 / 错误红; 未启动 = 深蓝底金边。
 fn make_tray_icon(status: Option<&str>) -> tray_icon::Icon {
     const W: usize = 32;
     const H: usize = 32;
     const R: f32 = 7.0;
     let mut px = vec![0u8; W * H * 4];
-    let bg = [22, 32, 46, 255];
-    let border = match status {
+    let (bg, border, letter) = match status {
         Some(s) => {
             let c = status_color(s);
-            [c.r(), c.g(), c.b(), 255]
+            ([c.r(), c.g(), c.b(), 255], [240, 244, 248, 255], [17, 22, 32, 255])
         }
-        None => [255, 213, 107, 255],
+        None => ([22, 32, 46, 255], [255, 213, 107, 255], [240, 244, 248, 255]),
     };
-    let letter = [240, 244, 248, 255];
 
     for y in 0..H {
         for x in 0..W {

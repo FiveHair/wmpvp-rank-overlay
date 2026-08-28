@@ -50,6 +50,10 @@ pub struct PluginDef {
     pub retry_sec: u64,
     #[serde(default)]
     pub extract: Vec<Extractor>,
+    /// 调试模式输出: 变量 -> 模拟值。数字 = 起始值(每次约 40% 概率 +1);
+    /// 字符串 = 固定输出。未定义时调试模式不产出该插件数据
+    #[serde(default)]
+    pub mock: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -152,7 +156,7 @@ async fn run_plugin(
     };
     let mut sim: HashMap<String, i64> = HashMap::new();
     loop {
-        // 调试模式下插件直接输出随机递增的模拟值, 不真实抓取(便于调试前端展示/动画)
+        // 调试模式下插件输出 mock 段定义的模拟值, 不真实抓取(便于调试前端展示/动画)
         let mock_out = cfg_rx.borrow().mock;
         if mock_out {
             let ns = std::time::SystemTime::now()
@@ -160,25 +164,31 @@ async fn run_plugin(
                 .map(|d| d.subsec_nanos())
                 .unwrap_or(0);
             let mut vals: HashMap<String, String> = HashMap::new();
-            for ex in &def.extract {
-                let v = sim
-                    .entry(ex.var.clone())
-                    .or_insert(((ns % 300 + ex.var.len() as u32 * 37) % 400 + 100) as i64);
-                // 每周期约 40% 概率 +1, 各变量按名哈希去相关
-                let h = ex
-                    .var
-                    .bytes()
-                    .fold(0u32, |a, b| a.wrapping_mul(31).wrapping_add(b as u32));
-                if (ns ^ h.wrapping_mul(2654435761)) % 5 < 2 {
-                    *v += 1;
+            for (var, mv) in &def.mock {
+                match mv {
+                    // 数字: 从定义的起始值开始缓慢递增(每周期约 40% 概率 +1, 按变量名去相关)
+                    serde_json::Value::Number(n) => {
+                        let v = sim
+                            .entry(var.clone())
+                            .or_insert(n.as_i64().unwrap_or(0));
+                        let h = var
+                            .bytes()
+                            .fold(0u32, |a, b| a.wrapping_mul(31).wrapping_add(b as u32));
+                        if (ns ^ h.wrapping_mul(2654435761)) % 5 < 2 {
+                            *v += 1;
+                        }
+                        vals.insert(var.clone(), v.to_string());
+                    }
+                    // 字符串: 固定输出
+                    serde_json::Value::String(s) => {
+                        vals.insert(var.clone(), s.clone());
+                    }
+                    _ => {}
                 }
-                vals.insert(ex.var.clone(), v.to_string());
             }
-            state
-                .plugins
-                .lock()
-                .await
-                .insert(def.name.clone(), vals);
+            if !vals.is_empty() {
+                state.plugins.lock().await.insert(def.name.clone(), vals);
+            }
             tokio::select! {
                 _ = sleep(Duration::from_secs(5)) => {}
                 _ = cfg_rx.changed() => {}
