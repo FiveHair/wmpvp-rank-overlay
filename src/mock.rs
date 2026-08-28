@@ -153,13 +153,21 @@ pub async fn run(
         tracing::info!(round, "mock: 对局开始");
 
         // ---- 局内: 比分缓慢推进(观察原位刷新不重播动画) ----
-        for _ in 0..8 {
+        for tick in 0..8 {
             sleep(Duration::from_secs(3)).await;
             let mut ms = state.match_state.lock().await;
             if let Some(m) = ms.as_mut() {
                 m.ct_score += 1;
                 if m.ct_score % 3 == 0 {
                     m.t_score += 1;
+                }
+                // 模拟半场警匪互换: 中段翻转双方阵营, my_side 随之变化,
+                // 前端检测到后用开局冻结数据重播一次对阵(CT/T 互换)
+                if tick == 3 {
+                    for p in m.players.iter_mut() {
+                        p.side = if p.side == "CT" { "T" } else { "CT" }.to_string();
+                    }
+                    tracing::info!(round, "mock: 半场警匪互换");
                 }
             }
             *state.updated_at.lock().await = now_millis();

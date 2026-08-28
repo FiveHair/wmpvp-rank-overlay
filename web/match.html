@@ -315,6 +315,8 @@ let boardState = '';
 let animTimers = [];
 let pollTimer = null;
 const pristineBoard = document.getElementById('board').innerHTML;
+// 开局冻结: 变量表 + 我方阵营(半场互换检测与重播用)
+let entryMap = null, entryRaw = null, entryMySide = null, halftimeDone = false;
 
 function clearAnimTimers() { animTimers.forEach(clearTimeout); animTimers = []; }
 function scheduleNext(ms) { if (pollTimer) clearTimeout(pollTimer); pollTimer = setTimeout(refresh, ms); }
@@ -340,11 +342,25 @@ function resetOnEpoch(epoch) {
   shownMatchId = null;
   boardState = '';
   varSnapshotted = false;
+  entryMap = null; entryRaw = null; entryMySide = null; halftimeDone = false;
   document.getElementById('board').innerHTML = pristineBoard;
   const b = document.getElementById('board');
   if (b) b.classList.remove('in', 'settled', 'out');
   frost('');
   reportShowing(false);
+}
+
+// 半场互换: 冻结的开局变量表 CT/T 键互换(徽章/战绩/均分/我方标记随队伍走)
+function swapSides(map, raw) {
+  const sw = k =>
+    k.startsWith('MATCH.CT.') ? 'MATCH.T.' + k.slice(9) :
+    k.startsWith('MATCH.T.') ? 'MATCH.CT.' + k.slice(8) :
+    k.startsWith('CT.') ? 'T.' + k.slice(3) :
+    k.startsWith('T.') ? 'CT.' + k.slice(2) : k;
+  const m2 = {}, r2 = {};
+  for (const k of Object.keys(map)) m2[sw(k)] = map[k];
+  for (const k of Object.keys(raw)) r2[sw(k)] = raw[k];
+  return [m2, r2];
 }
 
 function teamsFull(m) {
@@ -363,6 +379,15 @@ function refresh() {
 
     const m = (s.in_match && s.match_info) ? s.match_info : null;
     if (m) {
+      // 半场警匪互换检测: 本局内 my_side 与开局不一致 -> 用开局冻结数据重播一次, CT/T 互换
+      if (m.match_id === shownMatchId && entryMap && !halftimeDone
+        && m.my_side && entryMySide && m.my_side !== entryMySide) {
+        halftimeDone = true;
+        const [m2, r2] = swapSides(entryMap, entryRaw);
+        playBoard(m2, r2, s.anim_exit);
+        scheduleNext(SLOW_POLL);
+        return;
+      }
       if (showing) { scheduleNext(POLL); return; }
       if (m.match_id === shownMatchId) { scheduleNext(SLOW_POLL); return; }
       if (!waitingSince) waitingSince = Date.now();
@@ -371,31 +396,11 @@ function refresh() {
       if (!ready) { scheduleNext(POLL); return; }
       waitingSince = 0;
       shownMatchId = m.match_id;
-      showing = true;
-      clearAnimTimers();
-      // 每局用原始模板重建面板并重置变量快照, 保证徽章/战绩等片段变量全新填充
-      document.getElementById('board').innerHTML = pristineBoard;
-      varSnapshotted = false;
-      const map = buildVarMap(s);
-      applyVars(map, buildRawMap(s)); // 开局抓取一次, 本局定格
-      // 任一侧无平均分则两侧均不展示
-      const hasAvg = !!(map['MATCH.CT.AVG'] && map['MATCH.T.AVG']);
-      document.querySelectorAll('#board .avg').forEach(el => { el.style.display = hasAvg ? '' : 'none'; });
-      document.getElementById('board').style.visibility = '';
-      matchRows = 5;
-      const b = document.getElementById('board');
-      const vsDelay = (matchRows - 1) * STAG_MS + ROW_MS + 150;
-      b.style.setProperty('--vsd', (vsDelay / 1000) + 's');
-      b.classList.remove('settled', 'out');
-      void b.offsetWidth;
-      b.classList.add('in');
-      frost('frost-in');
-      reportShowing(true);
-      animTimers.push(setTimeout(() => {
-        settleBoard();
-        if (s.anim_exit) animTimers.push(setTimeout(playExit, HOLD_MS));
-        else showing = false;
-      }, vsDelay + 500));
+      entryMap = buildVarMap(s);
+      entryRaw = buildRawMap(s);
+      entryMySide = m.my_side || null;
+      halftimeDone = false;
+      playBoard(entryMap, entryRaw, s.anim_exit);
       scheduleNext(SLOW_POLL);
     } else if (!showing) {
       waitingSince = 0;
@@ -416,6 +421,35 @@ function settleBoard() {
   if (b) { b.classList.remove('in'); b.classList.add('settled'); }
   frost('frost-stay');
 }
+
+// 填充变量并播放入场动画(开局/半场重播共用); map/raw 为定格的变量表
+function playBoard(map, raw, animExit) {
+  showing = true;
+  clearAnimTimers();
+  // 用原始模板重建面板并重置变量快照, 保证徽章/战绩等片段变量全新填充
+  document.getElementById('board').innerHTML = pristineBoard;
+  varSnapshotted = false;
+  applyVars(map, raw);
+  // 任一侧无平均分则两侧均不展示
+  const hasAvg = !!(map['MATCH.CT.AVG'] && map['MATCH.T.AVG']);
+  document.querySelectorAll('#board .avg').forEach(el => { el.style.display = hasAvg ? '' : 'none'; });
+  document.getElementById('board').style.visibility = '';
+  matchRows = 5;
+  const b = document.getElementById('board');
+  const vsDelay = (matchRows - 1) * STAG_MS + ROW_MS + 150;
+  b.style.setProperty('--vsd', (vsDelay / 1000) + 's');
+  b.classList.remove('settled', 'out');
+  void b.offsetWidth;
+  b.classList.add('in');
+  frost('frost-in');
+  reportShowing(true);
+  animTimers.push(setTimeout(() => {
+    settleBoard();
+    if (animExit) animTimers.push(setTimeout(playExit, HOLD_MS));
+    else showing = false;
+  }, vsDelay + 500));
+}
+
 function playExit() {
   const b = document.getElementById('board');
   if (!b) { showing = false; frost(''); return; }
