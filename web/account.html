@@ -45,7 +45,8 @@ body { font: 12px/1.5 "Microsoft YaHei", "PingFang SC", sans-serif; color: #e8ea
 .rb-ring .fil.sup { stroke: #31250f; }
 .s-diamond { width: 40px; height: 40px; object-fit: contain; display: block; flex: none; }
 .s-rank { display: inline-flex; align-items: center; gap: 4px; flex: none; }
-.s-rank .s-n { color: #ffd56b; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.s-rank .s-n { color: #ffd56b; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; gap: 2px; }
+.s-rank .s-n .s-star { width: 13px; height: 13px; display: block; }
 
 /* 赛季统计 */
 .idle-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 14px; }
@@ -125,7 +126,7 @@ function rankBadgeHtml(p) {
   if (p.rank_class === 'S') {
     const n = Math.max(0, Number(p.stars) || 0);
     return '<span class="s-rank"><img class="s-diamond" src="' + sDiamondIcon(n) + '" alt="S">'
-      + (n > 0 ? '<b class="s-n">x' + n + '</b>' : '') + '</span>';
+      + (n > 0 ? '<b class="s-n"><img class="s-star" src="/assets/star.svg" alt="">x' + n + '</b>' : '') + '</span>';
   }
   const elite = String(p.rank_label || '').indexOf('精英') >= 0;
   const cls = p.rank_class || 'U';

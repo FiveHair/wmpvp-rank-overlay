@@ -150,8 +150,44 @@ async fn run_plugin(
             }
         }
     };
+    let mut sim: HashMap<String, i64> = HashMap::new();
     loop {
-        let sid = cfg_rx.borrow().steam_id.trim().to_string();
+        let (mock_out, sid) = {
+            let c = cfg_rx.borrow();
+            (c.mock && c.mock_plugins, c.steam_id.trim().to_string())
+        };
+        // 模拟输出: 不真实抓取, 各变量输出随机递增的模拟值(便于调试前端展示/动画)
+        if mock_out {
+            let ns = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.subsec_nanos())
+                .unwrap_or(0);
+            let mut vals: HashMap<String, String> = HashMap::new();
+            for ex in &def.extract {
+                let v = sim
+                    .entry(ex.var.clone())
+                    .or_insert(((ns % 300 + ex.var.len() as u32 * 37) % 400 + 100) as i64);
+                // 每周期约 40% 概率 +1, 各变量按名哈希去相关
+                let h = ex
+                    .var
+                    .bytes()
+                    .fold(0u32, |a, b| a.wrapping_mul(31).wrapping_add(b as u32));
+                if (ns ^ h.wrapping_mul(2654435761)) % 5 < 2 {
+                    *v += 1;
+                }
+                vals.insert(ex.var.clone(), v.to_string());
+            }
+            state
+                .plugins
+                .lock()
+                .await
+                .insert(def.name.clone(), vals);
+            tokio::select! {
+                _ = sleep(Duration::from_secs(5)) => {}
+                _ = cfg_rx.changed() => {}
+            }
+            continue;
+        }
         if !is_file && sid.is_empty() {
             tokio::select! {
                 _ = sleep(Duration::from_secs(60)) => {}

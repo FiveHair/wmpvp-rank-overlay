@@ -220,6 +220,7 @@ fn main() -> anyhow::Result<()> {
         port: file.port,
         anim_exit: file.anim_exit,
         mock: file.mock,
+        mock_plugins: file.mock_plugins,
     };
 
     let (cfg_tx, state) = start_service(initial)?;
@@ -489,6 +490,7 @@ impl OverlayApp {
                     port,
                     anim_exit: self.file.anim_exit,
                     mock: self.file.mock,
+                    mock_plugins: self.file.mock_plugins,
                 }));
                 // 通知前端: 配置已变化, 丢弃本局已展示状态并按新数据重新展示
                 self.state.bump_cfg_epoch();
@@ -602,6 +604,10 @@ impl OverlayApp {
                 ui.label("模拟数据");
                 ui.checkbox(&mut self.file.mock, "调试模式(占位数据)")
                     .on_hover_text("开启后用占位数据, 保存并应用后立即切换; 不访问任何完美接口");
+                ui.end_row();
+                ui.label("插件模拟");
+                ui.checkbox(&mut self.file.mock_plugins, "插件输出模拟值(需勾选调试模式)")
+                    .on_hover_text("调试模式下插件不再真实抓取, 各变量输出随机递增的模拟值, 便于调试前端展示/动画");
                 ui.end_row();
                 ui.label("对局板退出");
                 ui.checkbox(&mut self.file.anim_exit, "入场播完 5 秒后自动退出动画")

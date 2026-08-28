@@ -20,21 +20,22 @@ body { font: 12px/1.5 "Microsoft YaHei", "PingFang SC", sans-serif; color: #e8ea
 .rb-ring .fil.sup { stroke: #31250f; }
 .s-diamond { width: 38px; height: 38px; object-fit: contain; display: block; flex: none; }
 .s-rank { display: inline-flex; align-items: center; gap: 4px; flex: none; height: 50px; }
-.s-rank .s-n { color: #ffd56b; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.s-rank .s-n { color: #ffd56b; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; gap: 2px; }
+.s-rank .s-n .s-star { width: 15px; height: 15px; display: block; }
 
 /* 对局板: 双列斜向对阵, 中央 VS, 底部均分; 两侧向中间收拢 */
 .battle { display: grid; grid-template-columns: 1fr auto 1fr; column-gap: 120px; row-gap: 12px; align-items: center; }
-.side-tag { font-size: 18px; font-weight: 700; padding: 4px 18px; border-radius: 6px; width: max-content; margin-left: 14px; opacity: 0; }
+.side-tag { font-size: 18px; font-weight: 700; padding: 4px 18px; border-radius: 6px; justify-self: center; opacity: 0; }
 .side-tag.ct-tag { background: rgba(64,130,255,.18); color: #7fb2ff; border: 1px solid rgba(64,130,255,.4); }
 .side-tag.t-tag { background: rgba(255,176,64,.16); color: #ffc06b; border: 1px solid rgba(255,176,64,.4); }
 .pcard {
   display: flex; align-items: center; gap: 14px;
   width: 430px; min-width: 0; padding: 8px 20px; min-height: 60px;
-  border-radius: 12px; margin-left: calc(var(--i) * 46px + var(--inset, 0px));
-  opacity: 0;
+  border-radius: 12px; opacity: 0;
 }
-.pcard.ct { background: rgba(64,130,255,.16); border: 1px solid rgba(64,130,255,.32); --inset: 90px; }
-.pcard.t  { background: rgba(255,176,64,.14); border: 1px solid rgba(255,176,64,.32); --inset: -90px; }
+/* 两侧向中间收拢并精确镜像: CT 从左起算, T 从右起算(不随 VS 宽度漂移) */
+.pcard.ct { background: rgba(64,130,255,.16); border: 1px solid rgba(64,130,255,.32); margin-left: calc(var(--i) * 46px + 140px); }
+.pcard.t  { background: rgba(255,176,64,.14); border: 1px solid rgba(255,176,64,.32); justify-self: end; margin-right: calc(var(--i) * 46px + 140px); }
 .pcard .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #d7dce3; font-size: 22px; }
 .pcard .nm.me { color: #ffd479; font-weight: 700; }
 .pcard .nm.me::before { content: "★ "; }
@@ -42,7 +43,7 @@ body { font: 12px/1.5 "Microsoft YaHei", "PingFang SC", sans-serif; color: #e8ea
 .vs { grid-column: 2; grid-row: 2 / span var(--rows, 5); align-self: center; justify-self: center; font-size: 68px; font-weight: 800; font-style: italic; color: #aebdd2; letter-spacing: 3px; opacity: 0; text-shadow: 0 4px 18px rgba(0,0,0,.6); }
 .avg { font-size: 16px; font-weight: 700; padding: 4px 16px; border-radius: 6px; width: max-content; opacity: 0; font-variant-numeric: tabular-nums; }
 .avg.ct-avg { background: rgba(64,130,255,.12); color: #8ab4ff; border: 1px solid rgba(64,130,255,.3); margin-left: 250px; }
-.avg.t-avg  { background: rgba(255,176,64,.11); color: #ffc06b; border: 1px solid rgba(255,176,64,.3); margin-left: 110px; }
+.avg.t-avg  { background: rgba(255,176,64,.11); color: #ffc06b; border: 1px solid rgba(255,176,64,.3); margin-left: auto; margin-right: 250px; }
 
 /* 近五场胜负: W 绿 / L 红 */
 .form { display: inline-flex; gap: 3px; flex: none; }
@@ -93,25 +94,27 @@ body.frost-stay .frost { opacity: 1; }
      本文件可随意改样式(勿删脚本与变量), 同名 match.css 会被自动加载且优先级更高 -->
 <div class="frost"></div>
 <div id="wrap">
-  <div id="board">
+  <div id="stage">
+    <div id="board">
     <div class="battle" style="--rows:5;--n:5">
       <div class="side-tag ct-tag" style="grid-row:1;grid-column:1">CT · {{MATCH.CT.TAG}}</div>
       <div class="side-tag t-tag" style="grid-row:1;grid-column:3">T · {{MATCH.T.TAG}}</div>
-      <div class="pcard ct" style="--i:0;grid-row:2;grid-column:1">{{{CT.1.BADGE}}}<span class="nm{{CT.1.MECLASS}}">{{CT.1.NAME}}</span><span class="form">{{{CT.1.FORM}}</span></div>
-      <div class="pcard t" style="--i:0;grid-row:2;grid-column:3">{{{T.1.BADGE}}}<span class="nm{{T.1.MECLASS}}">{{T.1.NAME}}</span><span class="form">{{{T.1.FORM}}</span></div>
-      <div class="pcard ct" style="--i:1;grid-row:3;grid-column:1">{{{CT.2.BADGE}}}<span class="nm{{CT.2.MECLASS}}">{{CT.2.NAME}}</span><span class="form">{{{CT.2.FORM}}</span></div>
-      <div class="pcard t" style="--i:1;grid-row:3;grid-column:3">{{{T.2.BADGE}}}<span class="nm{{T.2.MECLASS}}">{{T.2.NAME}}</span><span class="form">{{{T.2.FORM}}</span></div>
-      <div class="pcard ct" style="--i:2;grid-row:4;grid-column:1">{{{CT.3.BADGE}}}<span class="nm{{CT.3.MECLASS}}">{{CT.3.NAME}}</span><span class="form">{{{CT.3.FORM}}</span></div>
-      <div class="pcard t" style="--i:2;grid-row:4;grid-column:3">{{{T.3.BADGE}}}<span class="nm{{T.3.MECLASS}}">{{T.3.NAME}}</span><span class="form">{{{T.3.FORM}}</span></div>
-      <div class="pcard ct" style="--i:3;grid-row:5;grid-column:1">{{{CT.4.BADGE}}}<span class="nm{{CT.4.MECLASS}}">{{CT.4.NAME}}</span><span class="form">{{{CT.4.FORM}}</span></div>
-      <div class="pcard t" style="--i:3;grid-row:5;grid-column:3">{{{T.4.BADGE}}}<span class="nm{{T.4.MECLASS}}">{{T.4.NAME}}</span><span class="form">{{{T.4.FORM}}</span></div>
-      <div class="pcard ct" style="--i:4;grid-row:6;grid-column:1">{{{CT.5.BADGE}}}<span class="nm{{CT.5.MECLASS}}">{{CT.5.NAME}}</span><span class="form">{{{CT.5.FORM}}</span></div>
-      <div class="pcard t" style="--i:4;grid-row:6;grid-column:3">{{{T.5.BADGE}}}<span class="nm{{T.5.MECLASS}}">{{T.5.NAME}}</span><span class="form">{{{T.5.FORM}}</span></div>
+      <div class="pcard ct" style="--i:0;grid-row:2;grid-column:1">{{{CT.1.BADGE}}}<span class="nm{{CT.1.MECLASS}}">{{CT.1.NAME}}</span><span class="form">{{{CT.1.FORM}}}</span></div>
+      <div class="pcard t" style="--i:0;grid-row:2;grid-column:3">{{{T.1.BADGE}}}<span class="nm{{T.1.MECLASS}}">{{T.1.NAME}}</span><span class="form">{{{T.1.FORM}}}</span></div>
+      <div class="pcard ct" style="--i:1;grid-row:3;grid-column:1">{{{CT.2.BADGE}}}<span class="nm{{CT.2.MECLASS}}">{{CT.2.NAME}}</span><span class="form">{{{CT.2.FORM}}}</span></div>
+      <div class="pcard t" style="--i:1;grid-row:3;grid-column:3">{{{T.2.BADGE}}}<span class="nm{{T.2.MECLASS}}">{{T.2.NAME}}</span><span class="form">{{{T.2.FORM}}}</span></div>
+      <div class="pcard ct" style="--i:2;grid-row:4;grid-column:1">{{{CT.3.BADGE}}}<span class="nm{{CT.3.MECLASS}}">{{CT.3.NAME}}</span><span class="form">{{{CT.3.FORM}}}</span></div>
+      <div class="pcard t" style="--i:2;grid-row:4;grid-column:3">{{{T.3.BADGE}}}<span class="nm{{T.3.MECLASS}}">{{T.3.NAME}}</span><span class="form">{{{T.3.FORM}}}</span></div>
+      <div class="pcard ct" style="--i:3;grid-row:5;grid-column:1">{{{CT.4.BADGE}}}<span class="nm{{CT.4.MECLASS}}">{{CT.4.NAME}}</span><span class="form">{{{CT.4.FORM}}}</span></div>
+      <div class="pcard t" style="--i:3;grid-row:5;grid-column:3">{{{T.4.BADGE}}}<span class="nm{{T.4.MECLASS}}">{{T.4.NAME}}</span><span class="form">{{{T.4.FORM}}}</span></div>
+      <div class="pcard ct" style="--i:4;grid-row:6;grid-column:1">{{{CT.5.BADGE}}}<span class="nm{{CT.5.MECLASS}}">{{CT.5.NAME}}</span><span class="form">{{{CT.5.FORM}}}</span></div>
+      <div class="pcard t" style="--i:4;grid-row:6;grid-column:3">{{{T.5.BADGE}}}<span class="nm{{T.5.MECLASS}}">{{T.5.NAME}}</span><span class="form">{{{T.5.FORM}}}</span></div>
       <div class="vs">VS</div>
       <div class="avg ct-avg" style="grid-row:7;grid-column:1">均分 {{MATCH.CT.AVG}}</div>
       <div class="avg t-avg" style="grid-row:7;grid-column:3">均分 {{MATCH.T.AVG}}</div>
     </div>
   </div>
+</div>
 </div>
 <script>
 const POLL = 1500;
@@ -145,7 +148,7 @@ function rankBadgeHtml(p) {
   if (p.rank_class === 'S') {
     const n = Math.max(0, Number(p.stars) || 0);
     return '<span class="s-rank"><img class="s-diamond" src="' + sDiamondIcon(n) + '" alt="S">'
-      + (n > 0 ? '<b class="s-n">x' + n + '</b>' : '') + '</span>';
+      + (n > 0 ? '<b class="s-n"><img class="s-star" src="/assets/star.svg" alt="">x' + n + '</b>' : '') + '</span>';
   }
   const elite = String(p.rank_label || '').indexOf('精英') >= 0;
   const cls = p.rank_class || 'U';
@@ -349,6 +352,9 @@ function refresh() {
       shownMatchId = m.match_id;
       showing = true;
       clearAnimTimers();
+      // 每局用原始模板重建面板并重置变量快照, 保证徽章/战绩等片段变量全新填充
+      document.getElementById('board').innerHTML = pristineBoard;
+      varSnapshotted = false;
       const map = buildVarMap(s);
       applyVars(map, buildRawMap(s)); // 开局抓取一次, 本局定格
       // 任一侧无平均分则两侧均不展示
@@ -403,10 +409,10 @@ function playExit() {
 }
 
 // 对局板按 1920x1080 设计并整体等比放大 20%; 视口更小时按 1600x900 基准等比缩小
+// zoom 作用于内层 #stage(而不是 #wrap), 保证 100vh 的 flex 垂直居中不被缩放破坏
 function fitScale() {
-  document.getElementById('wrap').classList.add('center');
   const fit = Math.min(1.2, window.innerWidth / 1600, window.innerHeight / 900);
-  document.getElementById('wrap').style.zoom = fit;
+  document.getElementById('stage').style.zoom = fit;
 }
 fitScale();
 window.addEventListener('resize', fitScale);

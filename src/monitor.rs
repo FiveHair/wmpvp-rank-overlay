@@ -33,6 +33,8 @@ pub struct MonitorConfig {
     pub anim_exit: bool,
     /// 占位数据模式(保存后立即切换, 不需重启)
     pub mock: bool,
+    /// 插件模拟输出(mock 开启时生效): 插件变量输出随机递增的模拟值
+    pub mock_plugins: bool,
 }
 
 const STALL_TIMEOUT: Duration = Duration::from_secs(60);

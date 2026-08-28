@@ -18,6 +18,9 @@ pub struct ConfigFile {
     /// 调试完成后改为 false 重启即恢复真实数据。
     #[serde(default)]
     pub mock: bool,
+    /// 插件模拟输出: 勾选模拟数据时, 插件不再真实抓取, 各变量输出随机递增的模拟值(便于调试前端动画)。
+    #[serde(default)]
+    pub mock_plugins: bool,
     /// 对局板动画退出: 勾选后入场动画播完展示 5 秒再倒序播放退出动画;
     /// 不勾选则一直展示直至下一局。
     #[serde(default = "default_true")]
