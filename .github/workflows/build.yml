@@ -1,0 +1,52 @@
+name: build
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Assemble dist
+        shell: bash
+        run: |
+          mkdir -p dist/plugins dist/web
+          cp target/release/wmpvp-rank-overlay.exe dist/
+          cp web/* dist/web/
+          cp plugins/* dist/plugins/
+
+      - name: Package
+        shell: bash
+        run: 7z a wmpvp-rank-overlay-windows-x64.zip ./dist/*
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wmpvp-rank-overlay-windows-x64
+          path: dist/**
+
+      # 滚动 "latest" release: 每次构建重建, 始终挂着最新产物
+      - name: Publish to Releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest wmpvp-rank-overlay-windows-x64.zip \
+            --title "最新构建 (latest)" \
+            --notes "自动构建于 ${{ github.sha }}，由 push 到 master 触发。下载 wmpvp-rank-overlay-windows-x64.zip 解压即用。" \
+            --prerelease
