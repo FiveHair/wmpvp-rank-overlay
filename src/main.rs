@@ -746,13 +746,13 @@ impl eframe::App for OverlayApp {
                 if let Err(e) = t.set_icon(Some(make_tray_icon(Some(&ws_status)))) {
                     tracing::warn!(error = %e, "托盘图标更新失败");
                 }
-                let tip = format!("完美段位监控 - {}", status_text(&ws_status));
+                let tip = format!("{} - 完美段位监控", status_text(&ws_status));
                 if let Err(e) = t.set_tooltip(Some(tip)) {
                     tracing::warn!(error = %e, "托盘提示更新失败");
                 }
             }
-            // 状态同步到设置窗口标题栏
-            let title = format!("完美段位监控 - {}", status_text(&ws_status));
+            // 状态同步到设置窗口标题栏(状态在前)
+            let title = format!("{} - 完美段位监控", status_text(&ws_status));
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title));
         }
         // 关闭窗口 -> 直接退出程序(单实例锁随进程释放)

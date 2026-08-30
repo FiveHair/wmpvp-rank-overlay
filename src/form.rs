@@ -5,13 +5,11 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, Mutex};
 
 use crate::wmpvp;
 
-/// 对局期间每名玩家只拉一次(一局通常 <1h)
-const CACHE_TTL: Duration = Duration::from_secs(1800);
+/// 每局只取一次: 新对局由 reset_for_match 清空后重新拉取
 /// 最多展示的场次
 pub const FORM_GAMES: usize = 5;
 
@@ -31,7 +29,7 @@ pub struct FormService {
 }
 
 struct SharedCache {
-    map: HashMap<String, (FormEntry, Instant)>,
+    map: HashMap<String, FormEntry>,
     pending: HashSet<String>,
 }
 
@@ -73,10 +71,14 @@ impl FormService {
         }
         let mut cache = self.cache.lock().await;
         cache.pending.remove(&sid);
-        cache.map.insert(
-            sid,
-            (FormEntry { results, stars: None }, Instant::now()),
-        );
+        cache.map.insert(sid, FormEntry { results, stars: None });
+    }
+
+    /// 新对局开始: 清空近几场胜负缓存, 保证每局各取一次。
+    pub async fn reset_for_match(&self) {
+        let mut cache = self.cache.lock().await;
+        cache.map.clear();
+        cache.pending.clear();
     }
 
     /// 查询 steamId 的近几场胜负; 命中缓存立即返回, 否则入队(同 id 只排一次)。
@@ -86,30 +88,29 @@ impl FormService {
             return FormEntry::default();
         }
         let mut cache = self.cache.lock().await;
-        if let Some((entry, at)) = cache.map.get(&sid) {
-            if at.elapsed() < CACHE_TTL {
-                return entry.clone();
-            }
+        // 每局只取一次: 缓存命中直接返回, 新对局由 reset_for_match 清空后重新拉取
+        if let Some(entry) = cache.map.get(&sid) {
+            return entry.clone();
         }
         if !cache.pending.contains(&sid) {
             cache.pending.insert(sid.clone());
             cache
                 .map
                 .entry(sid.clone())
-                .or_insert_with(|| (FormEntry::default(), Instant::now()));
+                .or_insert_with(FormEntry::default);
             drop(cache);
             let _ = self.tx.send(sid.clone());
             let cache = self.cache.lock().await;
             return cache
                 .map
                 .get(&sid)
-                .map(|(e, _)| e.clone())
+                .cloned()
                 .unwrap_or_default();
         }
         cache
             .map
             .get(&sid)
-            .map(|(e, _)| e.clone())
+            .cloned()
             .unwrap_or_default()
     }
 }
@@ -132,9 +133,6 @@ async fn form_worker(
         };
         let mut cache = shared.lock().await;
         cache.pending.remove(&sid);
-        cache.map.insert(
-            sid,
-            (FormEntry { results, stars }, Instant::now()),
-        );
+        cache.map.insert(sid, FormEntry { results, stars });
     }
 }

@@ -766,6 +766,16 @@ async fn handle_match_payload(
         return;
     }
 
+    // 新对局判定提前: 先清空段位/近几场缓存, 让本局的每名玩家重新各取一次
+    let is_new = {
+        let lock = state.match_state.lock().await;
+        lock.as_ref().map(|old| old.match_id != match_id).unwrap_or(true)
+    };
+    if is_new {
+        ranks.reset_for_match().await;
+        forms.reset_for_match().await;
+    }
+
     let mut players = Vec::with_capacity(payload.players.len());
     for pp in payload.players.clone() {
         let sid = pp.steam_id.unwrap_or_default().trim().to_string();

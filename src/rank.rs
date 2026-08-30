@@ -5,7 +5,6 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, Mutex};
 
 use crate::wmpvp;
@@ -153,10 +152,7 @@ impl Default for RankStatus {
 struct CacheEntry {
     meta: RankMeta,
     name: String,
-    fetched_at: Instant,
 }
-
-const CACHE_TTL: Duration = Duration::from_secs(600);
 
 /// 段位查询服务: 暴露 `ensure(steam_id)`, 内部单 worker 串行执行网络请求。
 pub struct RankService {
@@ -201,10 +197,9 @@ impl RankService {
             };
         }
         let mut cache = self.cache.lock().await;
+        // 每局只取一次: 缓存命中直接返回, 新对局由 reset_for_match 清空后重新拉取
         if let Some(entry) = cache.map.get(&sid) {
-            if entry.fetched_at.elapsed() < CACHE_TTL {
-                return entry.meta.clone();
-            }
+            return entry.meta.clone();
         }
         if !cache.pending.contains(&sid) {
             cache.pending.insert(sid.clone());
@@ -214,7 +209,6 @@ impl RankService {
                     ..Default::default()
                 },
                 name: String::new(),
-                fetched_at: Instant::now(),
             });
             drop(cache); // 发送前释放锁, worker 回调不需要本锁
             let _ = self.tx.send(sid.clone());
@@ -257,15 +251,15 @@ impl RankService {
         let (meta, name) = meta_from_user(&user);
         let mut cache = self.cache.lock().await;
         cache.pending.remove(&sid);
-        cache.map.insert(
-            sid,
-            CacheEntry {
-                meta,
-                name,
-                fetched_at: Instant::now(),
-            },
-        );
+        cache.map.insert(sid, CacheEntry { meta, name });
         true
+    }
+
+    /// 新对局开始: 清空段位缓存(自己的账号随后由 ensure/seed 重新填充), 保证每局各取一次。
+    pub async fn reset_for_match(&self) {
+        let mut cache = self.cache.lock().await;
+        cache.map.clear();
+        cache.pending.clear();
     }
 
     /// 补充 S 段星级(更新已有缓存条目; mock/自账号 detailStats 用)。
@@ -290,14 +284,7 @@ async fn rank_worker(
         let (meta, name) = fetch_rank_once(&client, &sid).await;
         let mut cache = shared.lock().await;
         cache.pending.remove(&sid);
-        cache.map.insert(
-            sid.clone(),
-            CacheEntry {
-                meta,
-                name,
-                fetched_at: Instant::now(),
-            },
-        );
+        cache.map.insert(sid.clone(), CacheEntry { meta, name });
         tracing::info!(steam_id = %sid, "段位已更新");
     }
 }
