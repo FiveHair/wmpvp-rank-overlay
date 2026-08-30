@@ -129,6 +129,7 @@ const SLOW_POLL = 8000;      // 本局数据定格后, 只低速轮询以发现�
 const ROW_MS = 650, STAG_MS = 320;
 const WAIT_DATA_MS = 25000;  // 数据未齐的兜底入场时限
 const HOLD_MS = 5000;        // anim_exit 开启时入场后的停留时长
+const HALF_SWAP_DELAY_MS = 10000; // 收到换边消息后延后 10s 再重播(开局入场不受影响)
 
 // 磨砂底
 function frost(cls) {
@@ -324,6 +325,19 @@ let entryMap = null, entryRaw = null, entryMySide = null, entryHalfSeen = false,
 function clearAnimTimers() { animTimers.forEach(clearTimeout); animTimers = []; }
 function scheduleNext(ms) { if (pollTimer) clearTimeout(pollTimer); pollTimer = setTimeout(refresh, ms); }
 
+// 换边延后重播: 收到换边消息后不立即重播, 等 10s 再入场; 期间新一局/配置变化则取消
+let halfSwapTimer = null;
+function cancelHalfSwap() { if (halfSwapTimer) { clearTimeout(halfSwapTimer); halfSwapTimer = null; } }
+function scheduleHalfSwap(ms, animExit) {
+  cancelHalfSwap();
+  halfSwapTimer = setTimeout(() => {
+    halfSwapTimer = null;
+    if (!entryMap) return;
+    const [m2, r2] = swapSides(entryMap, entryRaw);
+    playBoard(m2, r2, animExit);
+  }, ms);
+}
+
 // 对局板展示状态上报: 账号卡读到后在 OBS 中隐藏自己(等同隐藏源)
 let reportedShowing = null;
 function reportShowing(on) {
@@ -349,6 +363,7 @@ function resetOnEpoch(epoch) {
   document.getElementById('board').innerHTML = pristineBoard;
   const b = document.getElementById('board');
   if (b) b.classList.remove('in', 'settled', 'out');
+  cancelHalfSwap();
   frost('');
   reportShowing(false);
 }
@@ -390,8 +405,8 @@ function refresh() {
         || (entryHalfSeen && m.my_side && entryMySide && m.my_side !== entryMySide);
       if (m.match_id === shownMatchId && entryMap && !halftimeDone && halfTrigger) {
         halftimeDone = true;
-        const [m2, r2] = swapSides(entryMap, entryRaw);
-        playBoard(m2, r2, s.anim_exit);
+        // 换边消息到达后延后 10s 再用互换数据重播(每局一次)
+        scheduleHalfSwap(HALF_SWAP_DELAY_MS, s.anim_exit);
         scheduleNext(SLOW_POLL);
         return;
       }
@@ -403,6 +418,7 @@ function refresh() {
       if (!ready) { scheduleNext(POLL); return; }
       waitingSince = 0;
       shownMatchId = m.match_id;
+      cancelHalfSwap(); // 等待中的换边重播作废, 优先展示新一局
       entryMap = buildVarMap(s);
       entryRaw = buildRawMap(s);
       entryMySide = m.my_side || null;
@@ -412,10 +428,12 @@ function refresh() {
       scheduleNext(SLOW_POLL);
     } else if (!showing) {
       waitingSince = 0;
+      cancelHalfSwap(); // 对局已结束, 等待中的换边重播作废
       const b = document.getElementById('board');
       if (b && b.classList.contains('in')) settleBoard();
       scheduleNext(SLOW_POLL);
     } else {
+      cancelHalfSwap();
       scheduleNext(SLOW_POLL);
     }
   }).catch(() => {
