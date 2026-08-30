@@ -70,8 +70,10 @@ body { font: 12px/1.5 "Microsoft YaHei", "PingFang SC", sans-serif; color: #e8ea
 #wrap { position: relative; z-index: 1; }
 @keyframes frostIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes frostOut { from { opacity: 1; } to { opacity: 0; } }
-body.frost-in .frost { animation: frostIn .5s ease-out both; }
-body.frost-out .frost { animation: frostOut .4s ease-in both; }
+/* 出入同步: 背景与卡片一起出现/一起消失 —— 入场淡入时长 = 最后一行落位时刻;
+   退场延迟到最后一张卡片开始滑出再淡出, 同时结束 */
+body.frost-in .frost { animation: frostIn calc((var(--n, 5) - 1) * .32s + .65s) ease-out both; }
+body.frost-out .frost { animation: frostOut .5s ease-in both; animation-delay: calc((var(--n, 5) - 1) * .24s); }
 body.frost-stay .frost { opacity: 1; }
 
 /* 入场: 成对从屏幕两侧滑入, 行错峰半拍; 全部落位后 队标/VS/均分 依次入场 */
@@ -461,6 +463,8 @@ function playBoard(map, raw, animExit) {
   document.querySelectorAll('#board .avg').forEach(el => { el.style.display = hasAvg ? '' : 'none'; });
   document.getElementById('board').style.visibility = '';
   matchRows = 5;
+  // --n 同步给 body, 供 .frost 出入场时长的 calc() 使用
+  document.body.style.setProperty('--n', matchRows);
   const b = document.getElementById('board');
   const vsDelay = (matchRows - 1) * STAG_MS + ROW_MS + 150;
   b.style.setProperty('--vsd', (vsDelay / 1000) + 's');
